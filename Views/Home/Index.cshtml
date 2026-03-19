@@ -1,0 +1,112 @@
+@model KategoriSecici.ViewModels.AnaSayfaViewModel
+@using KategoriSecici.Models
+@{
+    var isEnglish = Model.Dil == "en";
+    ViewData["Title"] = isEnglish ? "Media Lists" : "Medya Listeleri";
+
+    string T(string tr, string en) => isEnglish ? en : tr;
+
+    string KategoriAdi(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Anime => "Anime",
+        MedyaKategori.Manga => "Manga",
+        MedyaKategori.Kitap => T("Kitap", "Book"),
+        MedyaKategori.Dizi => T("Dizi", "Series"),
+        MedyaKategori.Film => T("Film", "Movie"),
+        MedyaKategori.Oyun => T("Oyun", "Game"),
+        _ => k.ToString()
+    };
+
+    string KisaKod(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Anime => "AN",
+        MedyaKategori.Manga => "MA",
+        MedyaKategori.Kitap => "KI",
+        MedyaKategori.Dizi => "DI",
+        MedyaKategori.Film => "FI",
+        MedyaKategori.Oyun => "OY",
+        _ => "--"
+    };
+
+    string? mesaj = TempData["Mesaj"] as string;
+    string mesajTipi = TempData["MesajTipi"] as string ?? "info";
+}
+
+<div class="dashboard-page">
+<div class="dashboard-layout">
+    <aside class="category-sidebar" aria-label="categories">
+        <div class="sidebar-label">@T("Kategoriler", "Categories")</div>
+
+        <nav class="category-links">
+            @foreach (var kategori in Enum.GetValues<MedyaKategori>())
+            {
+                var isActive = kategori == Model.SeciliKategori;
+                <a asp-action="Index"
+                   asp-route-lang="@Model.Dil"
+                   asp-route-kategori="@kategori"
+                   class="category-link @(isActive ? "active" : string.Empty)">
+                    <span class="category-icon">@KisaKod(kategori)</span>
+                    <span class="category-text">@KategoriAdi(kategori)</span>
+                    <span class="category-count">@(Model.KategoriAdetleri.TryGetValue(kategori, out var adet) ? adet : 0)</span>
+                </a>
+            }
+        </nav>
+    </aside>
+
+    <section class="category-main">
+        <div class="mb-4">
+            <h1 class="mb-1">@KategoriAdi(Model.SeciliKategori)</h1>
+            <p class="text-muted mb-0">@T("Bu kategorideki listeyi goruntuluyorsun.", "You are viewing this category list.")</p>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(mesaj))
+        {
+            <div class="alert alert-@mesajTipi" role="alert">@mesaj</div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-body">
+                <h2 class="h5">@T("Bu kategoriye oge ekle", "Add item to this category")</h2>
+                <form asp-action="Ekle" method="post" class="row g-2">
+                    <input type="hidden" name="Dil" value="@Model.Dil" />
+                    <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
+                    <div class="col-md-9">
+                        <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                    </div>
+                    <div class="col-md-3 d-grid">
+                        <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-body">
+                <h2 class="h5">@T("Liste", "List")</h2>
+
+                @if (Model.SeciliKategoriOgeleri.Count == 0)
+                {
+                    <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.")</p>
+                }
+                else
+                {
+                    <ul class="list-group list-group-flush">
+                        @foreach (var item in Model.SeciliKategoriOgeleri)
+                        {
+                            <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
+                                <span>@item.Ad</span>
+                                <form asp-action="Sil" method="post" class="m-0">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                                    <input type="hidden" name="dil" value="@Model.Dil" />
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove")</button>
+                                </form>
+                            </li>
+                        }
+                    </ul>
+                }
+            </div>
+        </div>
+    </section>
+</div>
+</div>

@@ -1,0 +1,22 @@
+# Build artifacts
+bin/
+obj/
+
+# User/IDE
+.vs/
+*.user
+*.suo
+
+# Runtime and local data
+*.log
+*.db
+*.db-shm
+*.db-wal
+.keys/
+
+# Local tools
+tools/
+
+# OS
+.DS_Store
+Thumbs.db

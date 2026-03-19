@@ -1,0 +1,154 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus,
+.btn:active:focus,
+.btn-link.nav-link:focus,
+.form-control:focus,
+.form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+.dashboard-layout {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dashboard-page {
+  width: 100vw;
+  margin-left: calc(50% - 50vw);
+  padding: 0 1rem 0 0;
+}
+
+.category-sidebar {
+  width: 72px;
+  min-height: 70vh;
+  background: #111827;
+  border-radius: 14px;
+  padding: 12px 10px;
+  transition: width 0.25s ease;
+  overflow: hidden;
+  position: sticky;
+  top: 0.75rem;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.category-sidebar:hover {
+  width: 280px;
+}
+
+.sidebar-label {
+  color: #9ca3af;
+  font-size: 0.8rem;
+  margin: 0 6px 14px;
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.category-sidebar:hover .sidebar-label {
+  opacity: 1;
+}
+
+.category-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.category-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: #e5e7eb;
+  border-radius: 10px;
+  padding: 10px 8px;
+}
+
+.category-link:hover {
+  background: #1f2937;
+  color: #fff;
+}
+
+.category-link.active {
+  background: #2563eb;
+  color: #fff;
+}
+
+.category-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.category-text,
+.category-count {
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
+
+.category-sidebar:hover .category-text,
+.category-sidebar:hover .category-count {
+  opacity: 1;
+}
+
+.category-count {
+  margin-left: auto;
+  background: rgba(255, 255, 255, 0.18);
+  border-radius: 999px;
+  padding: 1px 9px;
+  font-size: 0.8rem;
+}
+
+.category-main {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 991px) {
+  .dashboard-layout {
+    flex-direction: column;
+  }
+
+  .category-sidebar,
+  .category-sidebar:hover {
+    width: 100%;
+    min-height: auto;
+    position: static;
+  }
+
+  .sidebar-label,
+  .category-text,
+  .category-count,
+  .category-sidebar:hover .sidebar-label,
+  .category-sidebar:hover .category-text,
+  .category-sidebar:hover .category-count {
+    opacity: 1;
+  }
+}

@@ -1,0 +1,29 @@
+@{
+    var lang = (ViewData["Lang"] as string ?? "tr").ToLowerInvariant();
+    bool isEnglish = lang == "en";
+    ViewData["Title"] = isEnglish ? "Settings" : "Ayarlar";
+    string T(string tr, string en) => isEnglish ? en : tr;
+}
+
+<div class="mb-4">
+    <h1 class="mb-2">@T("Ayarlar", "Settings")</h1>
+    <p class="text-muted mb-0">@T("Dil secimi ve genel site ayarlari burada toplanir.", "Language and general site settings are grouped here.")</p>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <h2 class="h5">@T("Dil", "Language")</h2>
+        <p class="mb-0">@T("Dil secimi sag ustteki Ayarlar menusu icinden yapilir.", "Language is changed from the top-right Settings menu.")</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="h5">@T("Yol Haritasi", "Roadmap")</h2>
+        <ul class="mb-0">
+            <li>@T("Kullanici girisi (kullanici adi/sifre)", "User login (username/password)")</li>
+            <li>@T("Herkese acik yayin + kalici domain", "Public hosting + permanent domain")</li>
+            <li>@T("Uygulama surumu (masaustu/mobil)", "App version (desktop/mobile)")</li>
+        </ul>
+    </div>
+</div>
