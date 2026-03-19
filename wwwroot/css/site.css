@@ -30,7 +30,7 @@ body {
 }
 
 html[data-theme='dark'] {
-  --page-bg: #0f172a;
+  --page-bg: #000000;
   --text-color: #e2e8f0;
   --card-bg: #1e293b;
   --card-border: #334155;
@@ -68,7 +68,33 @@ body {
 }
 
 body.index-page {
-  background: #10284b;
+  background: var(--page-bg);
+}
+
+html[data-theme='dark'] .btn-outline-dark {
+  color: #f8fafc;
+  border-color: #94a3b8;
+}
+
+html[data-theme='dark'] .btn-outline-dark:hover,
+html[data-theme='dark'] .btn-outline-dark:focus {
+  background: #334155;
+  color: #ffffff;
+  border-color: #cbd5e1;
+}
+
+html[data-theme='dark'] .dropdown-menu {
+  background: #111827;
+  border-color: #334155;
+}
+
+html[data-theme='dark'] .dropdown-item {
+  color: #f8fafc;
+}
+
+html[data-theme='dark'] .dropdown-item:hover {
+  background: #1f2937;
+  color: #ffffff;
 }
 
 .dashboard-layout {
