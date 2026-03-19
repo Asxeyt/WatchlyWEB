@@ -30,6 +30,22 @@
 
     string? mesaj = TempData["Mesaj"] as string;
     string mesajTipi = TempData["MesajTipi"] as string ?? "info";
+
+    string TamamlandiButonuMetni(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Kitap => T("Okudum", "Read"),
+        MedyaKategori.Manga => T("Okudum", "Read"),
+        MedyaKategori.Oyun => T("Oynadim", "Played"),
+        _ => T("Izledim", "Watched")
+    };
+
+    string TamamlananlarBasligi(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Kitap => T("Okuduklarim", "Read Items"),
+        MedyaKategori.Manga => T("Okuduklarim", "Read Items"),
+        MedyaKategori.Oyun => T("Oynadiklarim", "Played Items"),
+        _ => T("Izlediklerim", "Watched")
+    };
 }
 
 <div class="dashboard-page">
@@ -117,7 +133,7 @@
                                                 <input type="hidden" name="id" value="@item.Id" />
                                                 <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
                                                 <input type="hidden" name="dil" value="@Model.Dil" />
-                                                <button type="submit" class="btn btn-sm btn-warning">@T("Izledim", "Watched")</button>
+                                                <button type="submit" class="btn btn-sm btn-warning">@TamamlandiButonuMetni(Model.SeciliKategori)</button>
                                             </form>
                                             <form asp-action="Sil" method="post" class="m-0">
                                                 <input type="hidden" name="id" value="@item.Id" />
@@ -136,7 +152,7 @@
 
             <aside class="card watched-panel category-list-card">
                 <div class="card-body">
-                    <h2 class="h5 mb-3">@T("Izlediklerim", "Watched")</h2>
+                    <h2 class="h5 mb-3">@TamamlananlarBasligi(Model.SeciliKategori)</h2>
                     @if (Model.SeciliKategoriIzlenenOgeleri.Count == 0)
                     {
                         <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.")</p>
