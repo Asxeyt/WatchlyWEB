@@ -31,7 +31,7 @@ body {
 
 html[data-theme='dark'] {
   --page-bg: #000000;
-  --text-color: #e2e8f0;
+  --text-color: #ffffff;
   --card-bg: #1e293b;
   --card-border: #334155;
   --nav-bg: #111827;
@@ -67,6 +67,10 @@ body {
   color: color-mix(in srgb, var(--text-color) 60%, #9ca3af 40%) !important;
 }
 
+html[data-theme='dark'] .text-muted {
+  color: #ffffff !important;
+}
+
 body.index-page {
   background: var(--page-bg);
 }
@@ -95,6 +99,47 @@ html[data-theme='dark'] .dropdown-item {
 html[data-theme='dark'] .dropdown-item:hover {
   background: #1f2937;
   color: #ffffff;
+}
+
+html[data-theme='dark'] .category-form-card,
+html[data-theme='dark'] .category-list-card {
+  background: #c46954;
+  border-color: #c46954;
+}
+
+html[data-theme='dark'] .category-form-card .form-control,
+html[data-theme='dark'] .category-list-card .form-control {
+  color: #ffffff;
+}
+
+html[data-theme='dark'] .category-list-card .list-group-item {
+  background: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.settings-panel {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+.settings-option {
+  display: flex;
+  justify-content: center;
+}
+
+.settings-button {
+  min-width: min(420px, 90%);
+  font-size: 1.5rem;
+  font-weight: 700;
+  text-align: center;
+  padding-top: 0.8rem;
+  padding-bottom: 0.8rem;
+}
+
+.settings-menu {
+  min-width: min(420px, 90%);
+  font-size: 1.1rem;
 }
 
 .dashboard-layout {
