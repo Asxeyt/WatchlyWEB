@@ -25,6 +25,10 @@ body {
   margin: 0;
 }
 
+body.index-page {
+  background: #10284b;
+}
+
 .dashboard-layout {
   display: flex;
   gap: 1rem;

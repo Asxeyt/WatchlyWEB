@@ -24,6 +24,7 @@ public class HomeController : Controller
         var currentLang = NormalizeLang(lang);
         ViewData["Lang"] = currentLang;
         ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
+        ViewData["BodyClass"] = "anasayfa-page";
         return View();
     }
 
@@ -39,6 +40,7 @@ public class HomeController : Controller
         var currentLang = NormalizeLang(lang);
         ViewData["Lang"] = currentLang;
         ViewData["SelectedCategory"] = kategori.ToString();
+        ViewData["BodyClass"] = "index-page";
         var model = await BuildViewModelAsync(currentLang, kategori);
         return View(model);
     }
@@ -127,6 +129,7 @@ public class HomeController : Controller
         var currentLang = NormalizeLang(lang);
         ViewData["Lang"] = currentLang;
         ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
+        ViewData["BodyClass"] = "settings-page";
         return View();
     }
 

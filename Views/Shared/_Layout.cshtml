@@ -17,7 +17,7 @@
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/KategoriSecici.styles.css" asp-append-version="true" />
 </head>
-<body>
+<body class="@(ViewData["BodyClass"] as string ?? string.Empty)">
     <header>
         <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
