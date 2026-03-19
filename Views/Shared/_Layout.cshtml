@@ -39,7 +39,10 @@
                     </ul>
                     <ul class="navbar-nav ms-auto">
                         <li class="nav-item">
-                            <a class="nav-link text-dark" asp-controller="Home" asp-action="Settings" asp-route-lang="@lang">@T("Ayarlar", "Settings")</a>
+                            <a class="nav-link text-dark settings-nav-link" asp-controller="Home" asp-action="Settings" asp-route-lang="@lang">
+                                <span class="settings-icon" aria-hidden="true">&#9881;</span>
+                                <span>@T("Ayarlar", "Settings")</span>
+                            </a>
                         </li>
                     </ul>
                 </div>
