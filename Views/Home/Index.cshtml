@@ -101,23 +101,31 @@
                     <div class="card-body">
                         <h2 class="h5">@T("Liste", "List")</h2>
 
-                        @if (Model.SeciliKategoriOgeleri.Count == 0)
+                        @if (Model.SeciliKategoriListeOgeleri.Count == 0)
                         {
                             <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.")</p>
                         }
                         else
                         {
                             <ul class="list-group list-group-flush">
-                                @foreach (var item in Model.SeciliKategoriOgeleri)
+                                @foreach (var item in Model.SeciliKategoriListeOgeleri)
                                 {
                                     <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
                                         <span>@item.Ad</span>
-                                        <form asp-action="Sil" method="post" class="m-0">
-                                            <input type="hidden" name="id" value="@item.Id" />
-                                            <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
-                                            <input type="hidden" name="dil" value="@Model.Dil" />
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove")</button>
-                                        </form>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <form asp-action="IzledimYap" method="post" class="m-0">
+                                                <input type="hidden" name="id" value="@item.Id" />
+                                                <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                                                <input type="hidden" name="dil" value="@Model.Dil" />
+                                                <button type="submit" class="btn btn-sm btn-warning">@T("Izledim", "Watched")</button>
+                                            </form>
+                                            <form asp-action="Sil" method="post" class="m-0">
+                                                <input type="hidden" name="id" value="@item.Id" />
+                                                <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                                                <input type="hidden" name="dil" value="@Model.Dil" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove")</button>
+                                            </form>
+                                        </div>
                                     </li>
                                 }
                             </ul>
@@ -129,17 +137,23 @@
             <aside class="card watched-panel category-list-card">
                 <div class="card-body">
                     <h2 class="h5 mb-3">@T("Izlediklerim", "Watched")</h2>
-                    @if (Model.SeciliKategoriOgeleri.Count == 0)
+                    @if (Model.SeciliKategoriIzlenenOgeleri.Count == 0)
                     {
                         <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.")</p>
                     }
                     else
                     {
                         <ul class="list-group list-group-flush">
-                            @foreach (var item in Model.SeciliKategoriOgeleri)
+                            @foreach (var item in Model.SeciliKategoriIzlenenOgeleri)
                             {
-                                <li class="list-group-item px-0">
+                                <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
                                     <span>@item.Ad</span>
+                                    <form asp-action="ListeyeGeriAl" method="post" class="m-0">
+                                        <input type="hidden" name="id" value="@item.Id" />
+                                        <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                                        <input type="hidden" name="dil" value="@Model.Dil" />
+                                        <button type="submit" class="btn btn-sm btn-outline-secondary">@T("Listeye Al", "Move to List")</button>
+                                    </form>
                                 </li>
                             }
                         </ul>

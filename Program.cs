@@ -24,6 +24,27 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.EnsureCreated();
+    var dbConnection = db.Database.GetDbConnection();
+    dbConnection.Open();
+    using (var cmd = dbConnection.CreateCommand())
+    {
+        cmd.CommandText = "PRAGMA table_info('MedyaOgeleri');";
+        using var reader = cmd.ExecuteReader();
+        var hasIzlendi = false;
+        while (reader.Read())
+        {
+            if (string.Equals(reader["name"]?.ToString(), "Izlendi", StringComparison.OrdinalIgnoreCase))
+            {
+                hasIzlendi = true;
+                break;
+            }
+        }
+
+        if (!hasIzlendi)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Izlendi INTEGER NOT NULL DEFAULT 0;");
+        }
+    }
     SeedData.Initialize(db);
 }
 

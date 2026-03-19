@@ -62,7 +62,8 @@ public class HomeController : Controller
         var yeniKayit = new MedyaOgesi
         {
             Ad = form.YeniOgeAdi.Trim(),
-            Kategori = seciliKategori
+            Kategori = seciliKategori,
+            Izlendi = false
         };
 
         _dbContext.MedyaOgeleri.Add(yeniKayit);
@@ -98,11 +99,47 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> IzledimYap(int id, MedyaKategori kategori, string dil = "tr")
+    {
+        var lang = NormalizeLang(dil);
+        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id);
+        if (kayit is null)
+        {
+            TempData["Mesaj"] = lang == "en" ? "Item not found." : "Kayit bulunamadi.";
+            TempData["MesajTipi"] = "warning";
+            return RedirectToAction(nameof(Index), new { lang, kategori });
+        }
+
+        kayit.Izlendi = true;
+        await _dbContext.SaveChangesAsync();
+        return RedirectToAction(nameof(Index), new { lang, kategori });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ListeyeGeriAl(int id, MedyaKategori kategori, string dil = "tr")
+    {
+        var lang = NormalizeLang(dil);
+        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id);
+        if (kayit is null)
+        {
+            TempData["Mesaj"] = lang == "en" ? "Item not found." : "Kayit bulunamadi.";
+            TempData["MesajTipi"] = "warning";
+            return RedirectToAction(nameof(Index), new { lang, kategori });
+        }
+
+        kayit.Izlendi = false;
+        await _dbContext.SaveChangesAsync();
+        return RedirectToAction(nameof(Index), new { lang, kategori });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> RastgeleSec(MedyaKategori kategori, string dil = "tr")
     {
         var lang = NormalizeLang(dil);
         var kayitlar = await _dbContext.MedyaOgeleri
-            .Where(x => x.Kategori == kategori)
+            .Where(x => x.Kategori == kategori && !x.Izlendi)
             .Select(x => x.Ad)
             .ToListAsync();
 
@@ -166,6 +203,8 @@ public class HomeController : Controller
             Dil = currentLang,
             SeciliKategori = seciliKategori,
             SeciliKategoriOgeleri = seciliListe,
+            SeciliKategoriListeOgeleri = seciliListe.Where(x => !x.Izlendi).ToList(),
+            SeciliKategoriIzlenenOgeleri = seciliListe.Where(x => x.Izlendi).ToList(),
             RastgeleSecilenOge = TempData["RastgeleSonuc"] as string,
             KategoriAdetleri = kategoriAdetleri
         };

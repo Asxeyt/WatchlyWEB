@@ -14,4 +14,19 @@
 
     applyTheme(theme);
   };
+
+  function applyMusic(mode) {
+    localStorage.setItem('musicMode', mode);
+  }
+
+  var initialMusicMode = localStorage.getItem('musicMode') || 'off';
+  applyMusic(initialMusicMode === 'on' ? 'on' : 'off');
+
+  window.setMusic = function (mode) {
+    if (mode !== 'on' && mode !== 'off') {
+      return;
+    }
+
+    applyMusic(mode);
+  };
 })();

@@ -332,7 +332,7 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
 
 .category-content-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr) clamp(560px, 40vw, 700px);
   gap: 1rem;
   align-items: start;
 }
@@ -344,6 +344,7 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
 .watched-panel {
   position: sticky;
   top: 0.75rem;
+  min-height: 260px;
 }
 
 .category-action-row {

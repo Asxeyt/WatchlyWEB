@@ -34,5 +34,15 @@
                 <li><button type="button" class="dropdown-item" onclick="setTheme('light')">Light</button></li>
             </ul>
         </div>
+
+        <div class="dropdown mt-3 settings-option">
+            <button class="btn btn-outline-dark dropdown-toggle settings-button" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                @T("Muzik", "Music")
+            </button>
+            <ul class="dropdown-menu settings-menu">
+                <li><button type="button" class="dropdown-item" onclick="setMusic('on')">@T("Ac", "On")</button></li>
+                <li><button type="button" class="dropdown-item" onclick="setMusic('off')">@T("Kapat", "Off")</button></li>
+            </ul>
+        </div>
     </div>
 </div>
