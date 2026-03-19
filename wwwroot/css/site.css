@@ -330,6 +330,22 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
   min-width: 0;
 }
 
+.category-content-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 1rem;
+  align-items: start;
+}
+
+.category-primary-column {
+  min-width: 0;
+}
+
+.watched-panel {
+  position: sticky;
+  top: 0.75rem;
+}
+
 .category-action-row {
   display: flex;
   align-items: stretch;
@@ -393,6 +409,14 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
 
   .random-form-inline {
     width: 100%;
+  }
+
+  .category-content-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .watched-panel {
+    position: static;
   }
 }
 
