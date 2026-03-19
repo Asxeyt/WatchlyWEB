@@ -79,6 +79,27 @@ public class HomeController : Controller
         return RedirectToAction(nameof(Index), new { lang, kategori });
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> RastgeleSec(MedyaKategori kategori, string dil = "tr")
+    {
+        var lang = NormalizeLang(dil);
+        var kayitlar = await _dbContext.MedyaOgeleri
+            .Where(x => x.Kategori == kategori)
+            .Select(x => x.Ad)
+            .ToListAsync();
+
+        if (kayitlar.Count == 0)
+        {
+            TempData["Mesaj"] = lang == "en" ? "No items in this category yet." : "Bu kategoride henuz oge yok.";
+            TempData["MesajTipi"] = "warning";
+            return RedirectToAction(nameof(Index), new { lang, kategori });
+        }
+
+        TempData["RastgeleSonuc"] = kayitlar[Random.Shared.Next(kayitlar.Count)];
+        return RedirectToAction(nameof(Index), new { lang, kategori });
+    }
+
     public IActionResult Privacy(string lang = "tr")
     {
         ViewData["Lang"] = NormalizeLang(lang);
@@ -125,6 +146,7 @@ public class HomeController : Controller
             Dil = currentLang,
             SeciliKategori = seciliKategori,
             SeciliKategoriOgeleri = seciliListe,
+            RastgeleSecilenOge = TempData["RastgeleSonuc"] as string,
             KategoriAdetleri = kategoriAdetleri
         };
     }

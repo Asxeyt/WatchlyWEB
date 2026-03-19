@@ -12,6 +12,8 @@ public class AnaSayfaViewModel
 
     public List<MedyaOgesi> SeciliKategoriOgeleri { get; set; } = new();
 
+    public string? RastgeleSecilenOge { get; set; }
+
     public IReadOnlyDictionary<MedyaKategori, int> KategoriAdetleri { get; set; }
         = new Dictionary<MedyaKategori, int>();
 }

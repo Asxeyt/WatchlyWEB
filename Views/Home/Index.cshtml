@@ -64,6 +64,13 @@
             <div class="alert alert-@mesajTipi" role="alert">@mesaj</div>
         }
 
+        @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenOge))
+        {
+            <div class="alert alert-success" role="alert">
+                <strong>@T("Rastgele Secim:", "Random Pick:")</strong> @Model.RastgeleSecilenOge
+            </div>
+        }
+
         <div class="card mb-4">
             <div class="card-body">
                 <h2 class="h5">@T("Bu kategoriye oge ekle", "Add item to this category")</h2>
@@ -76,6 +83,12 @@
                     <div class="col-md-3 d-grid">
                         <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
                     </div>
+                </form>
+
+                <form asp-action="RastgeleSec" method="post" class="mt-3 d-grid">
+                    <input type="hidden" name="dil" value="@Model.Dil" />
+                    <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                    <button type="submit" class="btn btn-success">@T("Rastgele Sec", "Pick Random")</button>
                 </form>
             </div>
         </div>
