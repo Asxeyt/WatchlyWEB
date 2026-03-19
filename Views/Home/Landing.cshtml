@@ -1,0 +1,61 @@
+@using KategoriSecici.Models
+@{
+    var lang = (ViewData["Lang"] as string ?? "tr").ToLowerInvariant();
+    if (lang != "en")
+    {
+        lang = "tr";
+    }
+
+    bool isEnglish = lang == "en";
+    ViewData["Title"] = isEnglish ? "Home" : "Anasayfa";
+    string T(string tr, string en) => isEnglish ? en : tr;
+
+    var sirali = new[]
+    {
+        MedyaKategori.Anime,
+        MedyaKategori.Manga,
+        MedyaKategori.Kitap,
+        MedyaKategori.Dizi,
+        MedyaKategori.Film,
+        MedyaKategori.Oyun
+    };
+
+    string KategoriAdi(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Kitap => T("Kitap", "Book"),
+        MedyaKategori.Dizi => T("Dizi", "Series"),
+        MedyaKategori.Film => T("Film", "Movie"),
+        MedyaKategori.Oyun => T("Oyun", "Game"),
+        _ => k.ToString()
+    };
+}
+
+<div class="mb-4">
+    <h1 class="mb-2">@T("Anasayfa", "Home")</h1>
+</div>
+
+<div class="card mb-4">
+    <div class="card-body">
+        <h2 class="h5 mb-3">@T("Kategoriler", "Categories")</h2>
+        <div class="d-grid gap-2">
+            @foreach (var k in sirali)
+            {
+                <a class="btn btn-outline-primary text-start" asp-action="Index" asp-route-lang="@lang" asp-route-kategori="@k">@KategoriAdi(k)</a>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <h2 class="h5 mb-3">@T("Haftanin En Populerleri", "Weekly Most Popular")</h2>
+        <ul class="mb-0">
+            <li>@T("Anime: Attack on Titan", "Anime: Attack on Titan")</li>
+            <li>@T("Manga: Berserk", "Manga: Berserk")</li>
+            <li>@T("Kitap: 1984", "Book: 1984")</li>
+            <li>@T("Dizi: Dark", "Series: Dark")</li>
+            <li>@T("Film: Interstellar", "Movie: Interstellar")</li>
+            <li>@T("Oyun: The Witcher 3", "Game: The Witcher 3")</li>
+        </ul>
+    </div>
+</div>

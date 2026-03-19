@@ -19,6 +19,15 @@ public class HomeController : Controller
     }
 
     [HttpGet]
+    public IActionResult Landing(string lang = "tr")
+    {
+        var currentLang = NormalizeLang(lang);
+        ViewData["Lang"] = currentLang;
+        ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
+        return View();
+    }
+
+    [HttpGet]
     public async Task<IActionResult> Index(string lang = "tr", MedyaKategori kategori = MedyaKategori.Film)
     {
         var currentLang = NormalizeLang(lang);
