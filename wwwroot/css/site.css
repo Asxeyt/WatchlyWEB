@@ -101,6 +101,34 @@ html[data-theme='dark'] .dropdown-item:hover {
   color: #ffffff;
 }
 
+html[data-theme='light'] .category-form-card,
+html[data-theme='light'] .category-list-card {
+  background: #111827;
+  border-color: #111827;
+}
+
+html[data-theme='light'] .category-form-card h2,
+html[data-theme='light'] .category-list-card h2,
+html[data-theme='light'] .category-list-card span,
+html[data-theme='light'] .category-list-card p {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .category-list-card .list-group-item {
+  background: transparent;
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+html[data-theme='light'] .category-list-card .text-muted {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .category-form-card .form-control {
+  color: #111827;
+  border-color: #374151;
+}
+
 html[data-theme='dark'] .category-form-card,
 html[data-theme='dark'] .category-list-card {
   background: #c46954;
