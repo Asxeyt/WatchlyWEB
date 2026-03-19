@@ -155,16 +155,6 @@ public class HomeController : Controller
 
     private static string NormalizeLang(string? lang)
     {
-        if (string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase))
-        {
-            return "en";
-        }
-
-        if (string.Equals(lang, "ja", StringComparison.OrdinalIgnoreCase))
-        {
-            return "ja";
-        }
-
-        return "tr";
+        return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
     }
 }
