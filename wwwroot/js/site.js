@@ -1,119 +1,95 @@
 (function () {
-  var audioContext = null;
-  var masterGain = null;
-  var lfo = null;
-  var lfoGain = null;
-  var baseOsc1 = null;
-  var baseOsc2 = null;
-  var chordTimer = null;
+  var musicAudio = null;
+  var savePositionTimer = null;
+  var pendingMusicStart = false;
+  var MUSIC_SOURCE = "/media/relax.mp3";
+  var MUSIC_MODE_KEY = "musicMode";
+  var MUSIC_TIME_KEY = "musicTime";
 
-  var relaxingNotes = [196.0, 220.0, 246.94, 261.63, 293.66];
-  var noteIndex = 0;
+  function getOrCreateMusicElement() {
+    if (musicAudio) {
+      return musicAudio;
+    }
 
-  function nextRelaxingNote() {
-    var note = relaxingNotes[noteIndex % relaxingNotes.length];
-    noteIndex += 1;
-    return note;
+    musicAudio = document.getElementById("global-music-player");
+    if (!musicAudio) {
+      musicAudio = document.createElement("audio");
+      musicAudio.id = "global-music-player";
+      musicAudio.preload = "auto";
+      musicAudio.loop = true;
+      musicAudio.style.display = "none";
+      document.body.appendChild(musicAudio);
+    }
+
+    if (!musicAudio.getAttribute("src")) {
+      musicAudio.setAttribute("src", MUSIC_SOURCE);
+    }
+
+    return musicAudio;
   }
 
-  function setChord(note) {
-    if (!baseOsc1 || !baseOsc2 || !audioContext) {
+  function saveMusicTime() {
+    if (!musicAudio || Number.isNaN(musicAudio.currentTime)) {
       return;
     }
 
-    var now = audioContext.currentTime;
-    baseOsc1.frequency.cancelScheduledValues(now);
-    baseOsc2.frequency.cancelScheduledValues(now);
-    baseOsc1.frequency.linearRampToValueAtTime(note, now + 1.8);
-    baseOsc2.frequency.linearRampToValueAtTime(note * 1.5, now + 1.8);
+    localStorage.setItem(MUSIC_TIME_KEY, String(musicAudio.currentTime));
   }
 
-  function stopRelaxingMusic() {
-    if (chordTimer) {
-      clearInterval(chordTimer);
-      chordTimer = null;
-    }
-
-    if (baseOsc1) {
-      baseOsc1.stop();
-      baseOsc1.disconnect();
-      baseOsc1 = null;
-    }
-
-    if (baseOsc2) {
-      baseOsc2.stop();
-      baseOsc2.disconnect();
-      baseOsc2 = null;
-    }
-
-    if (lfo) {
-      lfo.stop();
-      lfo.disconnect();
-      lfo = null;
-    }
-
-    if (lfoGain) {
-      lfoGain.disconnect();
-      lfoGain = null;
-    }
-
-    if (masterGain) {
-      masterGain.disconnect();
-      masterGain = null;
-    }
-
-    if (audioContext) {
-      audioContext.close();
-      audioContext = null;
-    }
-  }
-
-  function startRelaxingMusic() {
-    if (audioContext) {
+  function restoreMusicTime() {
+    if (!musicAudio) {
       return;
     }
 
-    var AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) {
+    var savedTime = parseFloat(localStorage.getItem(MUSIC_TIME_KEY) || "0");
+    if (!Number.isFinite(savedTime) || savedTime <= 0) {
       return;
     }
 
-    audioContext = new AudioCtx();
-    masterGain = audioContext.createGain();
-    masterGain.gain.value = 0.03;
-    masterGain.connect(audioContext.destination);
+    function applySavedTime() {
+      try {
+        musicAudio.currentTime = savedTime;
+      } catch (e) {
+        // metadata hazir degilse sessizce devam et
+      }
+    }
 
-    baseOsc1 = audioContext.createOscillator();
-    baseOsc2 = audioContext.createOscillator();
-    baseOsc1.type = "sine";
-    baseOsc2.type = "triangle";
+    if (musicAudio.readyState >= 1) {
+      applySavedTime();
+    } else {
+      musicAudio.addEventListener("loadedmetadata", applySavedTime, { once: true });
+    }
+  }
 
-    var osc1Gain = audioContext.createGain();
-    var osc2Gain = audioContext.createGain();
-    osc1Gain.gain.value = 0.8;
-    osc2Gain.gain.value = 0.45;
+  function startMusicPlayback() {
+    var audio = getOrCreateMusicElement();
+    restoreMusicTime();
 
-    baseOsc1.connect(osc1Gain);
-    baseOsc2.connect(osc2Gain);
-    osc1Gain.connect(masterGain);
-    osc2Gain.connect(masterGain);
+    var playPromise = audio.play();
+    if (playPromise && typeof playPromise.catch === "function") {
+      playPromise.catch(function () {
+        pendingMusicStart = true;
+      });
+    }
 
-    lfo = audioContext.createOscillator();
-    lfoGain = audioContext.createGain();
-    lfo.type = "sine";
-    lfo.frequency.value = 0.08;
-    lfoGain.gain.value = 3.5;
-    lfo.connect(lfoGain);
-    lfoGain.connect(baseOsc1.detune);
+    if (!savePositionTimer) {
+      savePositionTimer = setInterval(saveMusicTime, 1000);
+    }
+  }
 
-    setChord(nextRelaxingNote());
-    baseOsc1.start();
-    baseOsc2.start();
-    lfo.start();
+  function stopMusicPlayback() {
+    if (!musicAudio) {
+      return;
+    }
 
-    chordTimer = setInterval(function () {
-      setChord(nextRelaxingNote());
-    }, 9000);
+    saveMusicTime();
+    musicAudio.pause();
+    pendingMusicStart = false;
+
+    if (savePositionTimer) {
+      clearInterval(savePositionTimer);
+      savePositionTimer = null;
+    }
   }
 
   function applyTheme(theme) {
@@ -133,17 +109,17 @@
   };
 
   function applyMusic(mode) {
-    localStorage.setItem('musicMode', mode);
+    localStorage.setItem(MUSIC_MODE_KEY, mode);
 
     if (mode === 'on') {
-      startRelaxingMusic();
+      startMusicPlayback();
       return;
     }
 
-    stopRelaxingMusic();
+    stopMusicPlayback();
   }
 
-  var initialMusicMode = localStorage.getItem('musicMode') || 'off';
+  var initialMusicMode = localStorage.getItem(MUSIC_MODE_KEY) || 'off';
   applyMusic(initialMusicMode === 'on' ? 'on' : 'off');
 
   window.setMusic = function (mode) {
@@ -153,4 +129,20 @@
 
     applyMusic(mode);
   };
+
+  document.addEventListener("click", function () {
+    if (!pendingMusicStart) {
+      return;
+    }
+
+    if (localStorage.getItem(MUSIC_MODE_KEY) !== "on") {
+      pendingMusicStart = false;
+      return;
+    }
+
+    pendingMusicStart = false;
+    startMusicPlayback();
+  });
+
+  window.addEventListener("beforeunload", saveMusicTime);
 })();
