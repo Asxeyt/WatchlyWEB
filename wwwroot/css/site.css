@@ -152,3 +152,138 @@ body {
     opacity: 1;
   }
 }
+
+/* Home page layout */
+.home-shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  width: 100%;
+  position: relative;
+}
+
+.home-main {
+  flex: 1;
+  min-width: 0;
+  padding-right: 4rem;
+}
+
+.home-top-gap {
+  height: 1.75rem;
+}
+
+.home-row {
+  display: grid;
+  grid-template-columns: 240px minmax(380px, 1fr);
+  align-items: stretch;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.home-category-label {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: #0f172a;
+  font-weight: 800;
+  font-size: clamp(2rem, 3.2vw, 3rem);
+  letter-spacing: 0.03em;
+  line-height: 1;
+  padding-left: 0.25rem;
+}
+
+.home-category-label:hover {
+  color: #1d4ed8;
+}
+
+.home-popular-box {
+  min-height: 118px;
+  border: 1px solid #d1d5db;
+  border-radius: 10px;
+  background: #fff;
+  padding: 0.9rem 1rem;
+}
+
+.home-popular-box h2 {
+  margin: 0;
+  font-size: clamp(1rem, 1.5vw, 1.35rem);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.home-popular-placeholder {
+  height: 70px;
+}
+
+.right-hover-panel {
+  position: fixed;
+  top: 108px;
+  right: 0;
+  width: 56px;
+  min-height: 70vh;
+  background: #0f172a;
+  border-top-left-radius: 14px;
+  border-bottom-left-radius: 14px;
+  transition: width 0.25s ease;
+  overflow: hidden;
+  z-index: 20;
+}
+
+.right-hover-panel:hover {
+  width: 300px;
+}
+
+.right-hover-tab {
+  color: #f8fafc;
+  font-size: 0.9rem;
+  font-weight: 700;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-align: center;
+  padding: 1rem 0;
+  width: 56px;
+  height: 100%;
+}
+
+.right-hover-content {
+  position: absolute;
+  inset: 0 0 0 56px;
+}
+
+@media (max-width: 1200px) {
+  .home-main {
+    padding-right: 0;
+  }
+
+  .right-hover-panel,
+  .right-hover-panel:hover {
+    width: 100%;
+    min-height: 56px;
+    position: static;
+    border-radius: 10px;
+  }
+
+  .right-hover-tab {
+    writing-mode: horizontal-tb;
+    transform: none;
+    width: auto;
+    height: auto;
+    padding: 0.8rem 1rem;
+  }
+
+  .right-hover-content {
+    position: static;
+    min-height: 0;
+  }
+}
+
+@media (max-width: 900px) {
+  .home-row {
+    grid-template-columns: 1fr;
+    gap: 0.55rem;
+  }
+
+  .home-category-label {
+    font-size: clamp(1.8rem, 8vw, 2.4rem);
+  }
+}
