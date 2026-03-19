@@ -74,22 +74,24 @@
         <div class="card mb-4 category-form-card">
             <div class="card-body">
                 <h2 class="h5">@T("Bu kategoriye oge ekle", "Add item to this category")</h2>
-                <form asp-action="Ekle" method="post" class="row g-2">
-                    <input type="hidden" name="Dil" value="@Model.Dil" />
-                    <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
-                    <div class="col-md-9">
-                        <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
-                    </div>
-                    <div class="col-md-3 d-grid">
-                        <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
-                    </div>
-                </form>
+                <div class="category-action-row">
+                    <form asp-action="Ekle" method="post" class="add-item-form">
+                        <input type="hidden" name="Dil" value="@Model.Dil" />
+                        <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
+                        <div class="add-input-wrap">
+                            <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                        </div>
+                        <div class="add-button-wrap">
+                            <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
+                        </div>
+                    </form>
 
-                <form asp-action="RastgeleSec" method="post" class="mt-3 d-grid">
-                    <input type="hidden" name="dil" value="@Model.Dil" />
-                    <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
-                    <button type="submit" class="btn btn-success">@T("Rastgele Sec", "Pick Random")</button>
-                </form>
+                    <form asp-action="RastgeleSec" method="post" class="random-form-inline">
+                        <input type="hidden" name="dil" value="@Model.Dil" />
+                        <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                        <button type="submit" class="btn btn-success random-inline-btn">@T("Rastgele Sec", "Pick Random")</button>
+                    </form>
+                </div>
             </div>
         </div>
 

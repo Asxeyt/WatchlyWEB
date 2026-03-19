@@ -206,14 +206,15 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
 
 .settings-option {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
 }
 
 .settings-button {
   min-width: min(420px, 90%);
   font-size: 1.5rem;
   font-weight: 700;
-  text-align: center;
+  text-align: left;
+  padding-left: 1rem;
   padding-top: 0.8rem;
   padding-bottom: 0.8rem;
 }
@@ -329,6 +330,38 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
   min-width: 0;
 }
 
+.category-action-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.7rem;
+}
+
+.add-item-form {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 4fr) minmax(150px, 1fr);
+  gap: 0.6rem;
+}
+
+.add-input-wrap,
+.add-button-wrap {
+  display: flex;
+}
+
+.add-button-wrap .btn {
+  width: 100%;
+}
+
+.random-form-inline {
+  width: clamp(150px, 16vw, 220px);
+  display: flex;
+}
+
+.random-inline-btn {
+  width: 100%;
+  white-space: nowrap;
+}
+
 @media (max-width: 991px) {
   .dashboard-layout {
     flex-direction: column;
@@ -348,6 +381,18 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
   .category-sidebar:hover .category-text,
   .category-sidebar:hover .category-count {
     opacity: 1;
+  }
+
+  .category-action-row {
+    flex-direction: column;
+  }
+
+  .add-item-form {
+    grid-template-columns: 1fr;
+  }
+
+  .random-form-inline {
+    width: 100%;
   }
 }
 
