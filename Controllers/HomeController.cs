@@ -19,12 +19,18 @@ public class HomeController : Controller
     }
 
     [HttpGet]
-    public IActionResult Landing(string lang = "tr")
+    public IActionResult Anasayfa(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
         ViewData["Lang"] = currentLang;
         ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
         return View();
+    }
+
+    [HttpGet]
+    public IActionResult Landing(string lang = "tr")
+    {
+        return RedirectToAction(nameof(Anasayfa), new { lang = NormalizeLang(lang) });
     }
 
     [HttpGet]
