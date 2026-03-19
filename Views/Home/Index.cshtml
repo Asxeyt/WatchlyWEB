@@ -1,19 +1,29 @@
 @model KategoriSecici.ViewModels.AnaSayfaViewModel
 @using KategoriSecici.Models
 @{
-    var isEnglish = Model.Dil == "en";
-    ViewData["Title"] = isEnglish ? "Media Lists" : "Medya Listeleri";
+    var currentLang = Model.Dil;
+    ViewData["Title"] = currentLang switch
+    {
+        "en" => "Media Lists",
+        "ja" => "メディアリスト",
+        _ => "Medya Listeleri"
+    };
 
-    string T(string tr, string en) => isEnglish ? en : tr;
+    string T(string tr, string en, string ja) => currentLang switch
+    {
+        "en" => en,
+        "ja" => ja,
+        _ => tr
+    };
 
     string KategoriAdi(MedyaKategori k) => k switch
     {
         MedyaKategori.Anime => "Anime",
         MedyaKategori.Manga => "Manga",
-        MedyaKategori.Kitap => T("Kitap", "Book"),
-        MedyaKategori.Dizi => T("Dizi", "Series"),
-        MedyaKategori.Film => T("Film", "Movie"),
-        MedyaKategori.Oyun => T("Oyun", "Game"),
+        MedyaKategori.Kitap => T("Kitap", "Book", "本"),
+        MedyaKategori.Dizi => T("Dizi", "Series", "シリーズ"),
+        MedyaKategori.Film => T("Film", "Movie", "映画"),
+        MedyaKategori.Oyun => T("Oyun", "Game", "ゲーム"),
         _ => k.ToString()
     };
 
@@ -35,7 +45,7 @@
 <div class="dashboard-page">
 <div class="dashboard-layout">
     <aside class="category-sidebar" aria-label="categories">
-        <div class="sidebar-label">@T("Kategoriler", "Categories")</div>
+        <div class="sidebar-label">@T("Kategoriler", "Categories", "カテゴリ")</div>
 
         <nav class="category-links">
             @foreach (var kategori in Enum.GetValues<MedyaKategori>())
@@ -56,7 +66,7 @@
     <section class="category-main">
         <div class="mb-4">
             <h1 class="mb-1">@KategoriAdi(Model.SeciliKategori)</h1>
-            <p class="text-muted mb-0">@T("Bu kategorideki listeyi goruntuluyorsun.", "You are viewing this category list.")</p>
+            <p class="text-muted mb-0">@T("Bu kategorideki listeyi goruntuluyorsun.", "You are viewing this category list.", "このカテゴリのリストを表示しています。")</p>
         </div>
 
         @if (!string.IsNullOrWhiteSpace(mesaj))
@@ -67,39 +77,39 @@
         @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenOge))
         {
             <div class="alert alert-success" role="alert">
-                <strong>@T("Rastgele Secim:", "Random Pick:")</strong> @Model.RastgeleSecilenOge
+                <strong>@T("Rastgele Secim:", "Random Pick:", "ランダム選択:")</strong> @Model.RastgeleSecilenOge
             </div>
         }
 
         <div class="card mb-4">
             <div class="card-body">
-                <h2 class="h5">@T("Bu kategoriye oge ekle", "Add item to this category")</h2>
+                <h2 class="h5">@T("Bu kategoriye oge ekle", "Add item to this category", "このカテゴリに追加")</h2>
                 <form asp-action="Ekle" method="post" class="row g-2">
                     <input type="hidden" name="Dil" value="@Model.Dil" />
                     <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
                     <div class="col-md-9">
-                        <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                        <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar", "例: Interstellar")" />
                     </div>
                     <div class="col-md-3 d-grid">
-                        <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
+                        <button class="btn btn-primary" type="submit">@T("Ekle", "Add", "追加")</button>
                     </div>
                 </form>
 
                 <form asp-action="RastgeleSec" method="post" class="mt-3 d-grid">
                     <input type="hidden" name="dil" value="@Model.Dil" />
                     <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
-                    <button type="submit" class="btn btn-success">@T("Rastgele Sec", "Pick Random")</button>
+                    <button type="submit" class="btn btn-success">@T("Rastgele Sec", "Pick Random", "ランダム選択")</button>
                 </form>
             </div>
         </div>
 
         <div class="card">
             <div class="card-body">
-                <h2 class="h5">@T("Liste", "List")</h2>
+                <h2 class="h5">@T("Liste", "List", "リスト")</h2>
 
                 @if (Model.SeciliKategoriOgeleri.Count == 0)
                 {
-                    <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.")</p>
+                    <p class="text-muted mb-0">@T("Bu kategoride henuz kayit yok.", "No items in this category yet.", "このカテゴリにはまだ項目がありません。")</p>
                 }
                 else
                 {
@@ -112,7 +122,7 @@
                                     <input type="hidden" name="id" value="@item.Id" />
                                     <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
                                     <input type="hidden" name="dil" value="@Model.Dil" />
-                                    <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove")</button>
+                                    <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove", "削除")</button>
                                 </form>
                             </li>
                         }

@@ -109,7 +109,9 @@ public class HomeController : Controller
     [HttpGet]
     public IActionResult Settings(string lang = "tr")
     {
-        ViewData["Lang"] = NormalizeLang(lang);
+        var currentLang = NormalizeLang(lang);
+        ViewData["Lang"] = currentLang;
+        ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
         return View();
     }
 
@@ -153,6 +155,16 @@ public class HomeController : Controller
 
     private static string NormalizeLang(string? lang)
     {
-        return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+        if (string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase))
+        {
+            return "en";
+        }
+
+        if (string.Equals(lang, "ja", StringComparison.OrdinalIgnoreCase))
+        {
+            return "ja";
+        }
+
+        return "tr";
     }
 }
