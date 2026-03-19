@@ -21,8 +21,50 @@ body {
   min-height: 100%;
 }
 
+:root {
+  --page-bg: #f4f6fb;
+  --text-color: #0f172a;
+  --card-bg: #ffffff;
+  --card-border: #d1d5db;
+  --nav-bg: #ffffff;
+}
+
+html[data-theme='dark'] {
+  --page-bg: #0f172a;
+  --text-color: #e2e8f0;
+  --card-bg: #1e293b;
+  --card-border: #334155;
+  --nav-bg: #111827;
+}
+
 body {
   margin: 0;
+  background: var(--page-bg);
+  color: var(--text-color);
+}
+
+.navbar {
+  background: var(--nav-bg) !important;
+}
+
+.nav-link,
+.navbar-brand {
+  color: var(--text-color) !important;
+}
+
+.card {
+  background: var(--card-bg);
+  border-color: var(--card-border);
+}
+
+.list-group-item {
+  background: var(--card-bg);
+  color: var(--text-color);
+  border-color: var(--card-border);
+}
+
+.text-muted {
+  color: color-mix(in srgb, var(--text-color) 60%, #9ca3af 40%) !important;
 }
 
 body.index-page {

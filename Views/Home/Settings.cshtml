@@ -24,5 +24,15 @@
                 <li><a class="dropdown-item" asp-controller="Home" asp-action="Index" asp-route-lang="en" asp-route-kategori="Film">English</a></li>
             </ul>
         </div>
+
+        <div class="dropdown mt-3">
+            <button class="btn btn-outline-dark dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                @T("Tema", "Theme")
+            </button>
+            <ul class="dropdown-menu">
+                <li><button type="button" class="dropdown-item" onclick="setTheme('dark')">Dark</button></li>
+                <li><button type="button" class="dropdown-item" onclick="setTheme('light')">Light</button></li>
+            </ul>
+        </div>
     </div>
 </div>
