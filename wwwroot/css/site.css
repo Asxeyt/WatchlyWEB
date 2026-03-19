@@ -237,6 +237,30 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
   font-size: 1.1rem;
 }
 
+.settings-music-row {
+  align-items: center;
+  gap: 0.9rem;
+}
+
+.settings-volume-panel {
+  width: min(300px, 42%);
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 0.55rem 0.75rem;
+  background: var(--card-bg);
+}
+
+.settings-volume-label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.settings-volume-panel input[type='range'] {
+  width: 100%;
+}
+
 .dashboard-layout {
   display: flex;
   gap: 1rem;
@@ -431,6 +455,15 @@ html[data-theme='dark'] .category-form-card .btn-success:focus {
 
   .watched-panel {
     position: static;
+  }
+
+  .settings-music-row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .settings-volume-panel {
+    width: min(420px, 90%);
   }
 }
 

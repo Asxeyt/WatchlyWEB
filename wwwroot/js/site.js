@@ -5,6 +5,32 @@
   var MUSIC_SOURCE = "/media/relax.mp3";
   var MUSIC_MODE_KEY = "musicMode";
   var MUSIC_TIME_KEY = "musicTime";
+  var MUSIC_VOLUME_KEY = "musicVolume";
+
+  function normalizeVolume(value) {
+    var parsed = Number(value);
+    if (!Number.isFinite(parsed)) {
+      return 0.35;
+    }
+
+    if (parsed > 1) {
+      parsed = parsed / 100;
+    }
+
+    if (parsed < 0) {
+      return 0;
+    }
+
+    if (parsed > 1) {
+      return 1;
+    }
+
+    return parsed;
+  }
+
+  function getStoredVolume() {
+    return normalizeVolume(localStorage.getItem(MUSIC_VOLUME_KEY) || 0.35);
+  }
 
   function getOrCreateMusicElement() {
     if (musicAudio) {
@@ -24,6 +50,8 @@
     if (!musicAudio.getAttribute("src")) {
       musicAudio.setAttribute("src", MUSIC_SOURCE);
     }
+
+    musicAudio.volume = getStoredVolume();
 
     return musicAudio;
   }
@@ -119,6 +147,29 @@
     stopMusicPlayback();
   }
 
+  function applyMusicVolume(value) {
+    var volume = normalizeVolume(value);
+    localStorage.setItem(MUSIC_VOLUME_KEY, String(volume));
+
+    if (musicAudio) {
+      musicAudio.volume = volume;
+    }
+
+    var slider = document.getElementById("musicVolumeRange");
+    if (slider && document.activeElement !== slider) {
+      slider.value = String(Math.round(volume * 100));
+    }
+  }
+
+  function initMusicVolumeControl() {
+    var slider = document.getElementById("musicVolumeRange");
+    if (!slider) {
+      return;
+    }
+
+    slider.value = String(Math.round(getStoredVolume() * 100));
+  }
+
   var initialMusicMode = localStorage.getItem(MUSIC_MODE_KEY) || 'off';
   applyMusic(initialMusicMode === 'on' ? 'on' : 'off');
 
@@ -128,6 +179,10 @@
     }
 
     applyMusic(mode);
+  };
+
+  window.setMusicVolume = function (value) {
+    applyMusicVolume(value);
   };
 
   document.addEventListener("click", function () {
@@ -145,4 +200,7 @@
   });
 
   window.addEventListener("beforeunload", saveMusicTime);
+
+  applyMusicVolume(getStoredVolume());
+  initMusicVolumeControl();
 })();
