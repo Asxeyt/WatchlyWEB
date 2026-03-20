@@ -63,6 +63,7 @@ if (!string.IsNullOrWhiteSpace(renderDiskPath))
 Directory.CreateDirectory(keyStorePath);
 
 builder.Services.AddControllersWithViews();
+builder.Services.AddHttpClient();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
 builder.Services.AddScoped<PasswordHasher<KategoriSecici.Models.AppUser>>();

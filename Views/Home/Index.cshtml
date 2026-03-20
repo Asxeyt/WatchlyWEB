@@ -97,7 +97,12 @@
                                 <input type="hidden" name="Dil" value="@Model.Dil" />
                                 <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
                                 <div class="add-input-wrap">
-                                    <input class="form-control" name="YeniOgeAdi" placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                                    <input class="form-control"
+                                           id="catalogSearchInput"
+                                           name="YeniOgeAdi"
+                                           autocomplete="off"
+                                           placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                                    <div id="catalogSearchResults" class="catalog-search-results d-none"></div>
                                 </div>
                                 <div class="add-button-wrap">
                                     <button class="btn btn-primary" type="submit">@T("Ekle", "Add")</button>
@@ -180,3 +185,97 @@
     </section>
 </div>
 </div>
+
+@section Scripts {
+<script>
+(() => {
+  const input = document.getElementById('catalogSearchInput');
+  const resultsBox = document.getElementById('catalogSearchResults');
+  if (!input || !resultsBox) return;
+
+  const lang = '@Model.Dil';
+  const kategori = '@Model.SeciliKategori';
+  let timer = null;
+  let reqId = 0;
+
+  function esc(v) {
+    return (v || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function hideResults() {
+    resultsBox.innerHTML = '';
+    resultsBox.classList.add('d-none');
+  }
+
+  function renderItems(data) {
+    const items = (data && data.items) ? data.items : [];
+    const message = data && data.message ? data.message : '';
+
+    if (!items.length) {
+      if (!message) {
+        hideResults();
+        return;
+      }
+      resultsBox.innerHTML = `<div class="catalog-no-result">${esc(message)}</div>`;
+      resultsBox.classList.remove('d-none');
+      return;
+    }
+
+    const html = items.map(item => {
+      const name = esc(item.name || '');
+      const altName = esc(item.altName || '');
+      const score = esc(item.score || '');
+      const poster = esc(item.posterUrl || '');
+      return `
+        <button type="button" class="catalog-result-item" data-name="${name}">
+          ${poster ? `<img src="${poster}" alt="" class="catalog-thumb" loading="lazy" />` : `<span class="catalog-thumb catalog-thumb-empty"></span>`}
+          <span class="catalog-meta">
+            <span class="catalog-title">${name}</span>
+            ${altName ? `<span class="catalog-sub">${altName}</span>` : ''}
+            ${score ? `<span class="catalog-sub">Score: ${score}</span>` : ''}
+          </span>
+        </button>
+      `;
+    }).join('');
+
+    resultsBox.innerHTML = html;
+    resultsBox.classList.remove('d-none');
+
+    resultsBox.querySelectorAll('.catalog-result-item').forEach(btn => {
+      btn.addEventListener('click', () => {
+        input.value = btn.getAttribute('data-name') || '';
+        hideResults();
+        input.focus();
+      });
+    });
+  }
+
+  input.addEventListener('input', () => {
+    const q = input.value.trim();
+    if (q.length < 2) {
+      hideResults();
+      return;
+    }
+
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const currentReq = ++reqId;
+      try {
+        const url = `/Home/SearchCatalog?lang=${encodeURIComponent(lang)}&kategori=${encodeURIComponent(kategori)}&q=${encodeURIComponent(q)}`;
+        const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (currentReq !== reqId) return;
+        renderItems(data);
+      } catch (_) {}
+    }, 260);
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!resultsBox.contains(e.target) && e.target !== input) {
+      hideResults();
+    }
+  });
+})();
+</script>
+}

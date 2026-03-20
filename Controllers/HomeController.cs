@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Claims;
+using System.Text.Json;
 using KategoriSecici.Data;
 using KategoriSecici.Models;
 using KategoriSecici.ViewModels;
@@ -13,11 +14,13 @@ public class HomeController : Controller
 {
     private readonly ILogger<HomeController> _logger;
     private readonly AppDbContext _dbContext;
+    private readonly IHttpClientFactory _httpClientFactory;
 
-    public HomeController(ILogger<HomeController> logger, AppDbContext dbContext)
+    public HomeController(ILogger<HomeController> logger, AppDbContext dbContext, IHttpClientFactory httpClientFactory)
     {
         _logger = logger;
         _dbContext = dbContext;
+        _httpClientFactory = httpClientFactory;
     }
 
     [HttpGet]
@@ -217,6 +220,51 @@ public class HomeController : Controller
 
     [HttpGet]
     [Authorize]
+    public async Task<IActionResult> SearchCatalog(MedyaKategori kategori, string q, string lang = "tr")
+    {
+        var currentLang = NormalizeLang(lang);
+        var query = (q ?? string.Empty).Trim();
+        if (query.Length < 2)
+        {
+            return Json(new
+            {
+                items = Array.Empty<CatalogSuggestionViewModel>(),
+                message = currentLang == "en" ? "Type at least 2 characters." : "En az 2 karakter yaz."
+            });
+        }
+
+        var results = kategori switch
+        {
+            MedyaKategori.Anime => await SearchJikanAsync(query, true),
+            MedyaKategori.Manga => await SearchJikanAsync(query, false),
+            _ => new List<CatalogSuggestionViewModel>()
+        };
+
+        if (results.Count == 0)
+        {
+            var noResult = kategori switch
+            {
+                MedyaKategori.Anime => currentLang == "en" ? "No anime found." : "Boyle bir anime yok.",
+                MedyaKategori.Manga => currentLang == "en" ? "No manga found." : "Boyle bir manga yok.",
+                _ => currentLang == "en" ? "No result found." : "Sonuc bulunamadi."
+            };
+
+            return Json(new
+            {
+                items = Array.Empty<CatalogSuggestionViewModel>(),
+                message = noResult
+            });
+        }
+
+        return Json(new
+        {
+            items = results.Take(8),
+            message = string.Empty
+        });
+    }
+
+    [HttpGet]
+    [Authorize]
     public IActionResult Settings(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
@@ -298,5 +346,157 @@ public class HomeController : Controller
         }
 
         await _dbContext.SaveChangesAsync();
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchJikanAsync(string query, bool anime)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+
+        var endpoint = anime ? "anime" : "manga";
+        var url = $"https://api.jikan.moe/v4/{endpoint}?q={Uri.EscapeDataString(query)}&limit=20&sfw=true";
+
+        var items = await FetchJikanAsync(client, url);
+        if (items.Count == 0 && query.Length >= 4)
+        {
+            var fallback = query[..^1];
+            var fallbackUrl = $"https://api.jikan.moe/v4/{endpoint}?q={Uri.EscapeDataString(fallback)}&limit=20&sfw=true";
+            items = await FetchJikanAsync(client, fallbackUrl);
+        }
+
+        return RankFuzzy(query, items);
+    }
+
+    private static async Task<List<CatalogSuggestionViewModel>> FetchJikanAsync(HttpClient client, string url)
+    {
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in data.EnumerateArray())
+            {
+                var title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                var englishTitle = item.TryGetProperty("title_english", out var te) ? (te.GetString() ?? string.Empty) : string.Empty;
+                var synopsis = item.TryGetProperty("synopsis", out var s) ? (s.GetString() ?? string.Empty) : string.Empty;
+                var score = item.TryGetProperty("score", out var sc) && sc.ValueKind == JsonValueKind.Number
+                    ? sc.GetDouble().ToString("0.0")
+                    : string.Empty;
+
+                string poster = string.Empty;
+                if (item.TryGetProperty("images", out var images) &&
+                    images.TryGetProperty("jpg", out var jpg) &&
+                    jpg.TryGetProperty("image_url", out var imageUrl))
+                {
+                    poster = imageUrl.GetString() ?? string.Empty;
+                }
+
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = englishTitle,
+                    PosterUrl = poster,
+                    Overview = synopsis,
+                    Score = score
+                });
+            }
+
+            return list;
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private static List<CatalogSuggestionViewModel> RankFuzzy(string query, List<CatalogSuggestionViewModel> source)
+    {
+        static string Normalize(string v)
+        {
+            var s = (v ?? string.Empty).Trim().ToLowerInvariant();
+            return new string(s.Where(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch)).ToArray());
+        }
+
+        var q = Normalize(query);
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+
+        return source
+            .Select(x =>
+            {
+                var primary = Normalize(x.Name);
+                var alt = Normalize(x.AltName);
+                var best = Similarity(q, primary);
+                if (!string.IsNullOrWhiteSpace(alt))
+                {
+                    best = Math.Max(best, Similarity(q, alt));
+                }
+
+                if (primary.Contains(q, StringComparison.Ordinal))
+                {
+                    best = Math.Max(best, 0.99);
+                }
+
+                return new { Item = x, Score = best };
+            })
+            .Where(x => x.Score >= 0.40)
+            .OrderByDescending(x => x.Score)
+            .ThenBy(x => x.Item.Name)
+            .Select(x => x.Item)
+            .ToList();
+    }
+
+    private static double Similarity(string a, string b)
+    {
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+        {
+            return 0;
+        }
+
+        var dist = LevenshteinDistance(a, b);
+        var maxLen = Math.Max(a.Length, b.Length);
+        return maxLen == 0 ? 1 : 1 - (double)dist / maxLen;
+    }
+
+    private static int LevenshteinDistance(string s, string t)
+    {
+        var n = s.Length;
+        var m = t.Length;
+        var d = new int[n + 1, m + 1];
+
+        for (var i = 0; i <= n; i++)
+        {
+            d[i, 0] = i;
+        }
+
+        for (var j = 0; j <= m; j++)
+        {
+            d[0, j] = j;
+        }
+
+        for (var i = 1; i <= n; i++)
+        {
+            for (var j = 1; j <= m; j++)
+            {
+                var cost = s[i - 1] == t[j - 1] ? 0 : 1;
+                d[i, j] = Math.Min(
+                    Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
+                    d[i - 1, j - 1] + cost);
+            }
+        }
+
+        return d[n, m];
     }
 }
