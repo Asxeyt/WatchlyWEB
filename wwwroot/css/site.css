@@ -360,25 +360,25 @@ body {
 html[data-theme='light'] .profile-header-card,
 html[data-theme='light'] .profile-stat-card,
 html[data-theme='light'] .profile-future-space {
-  background: #c46954;
-  border-color: #c46954;
+  background: #111827;
+  border-color: #374151;
 }
 
 html[data-theme='light'] .profile-shell {
-  background: #c46954;
-  border-color: #8a4839;
+  background: #111827;
+  border-color: #374151;
 }
 
 html[data-theme='light'] .profile-title-area,
 html[data-theme='light'] .profile-subtitle,
 html[data-theme='light'] .profile-name-lg {
-  color: #c46954 !important;
+  color: #111827 !important;
 }
 
 html[data-theme='light'] .profile-stat-card,
 html[data-theme='light'] .profile-stat-number,
 html[data-theme='light'] .profile-stat-label {
-  color: #c46954 !important;
+  color: #111827 !important;
 }
 
 html[data-theme='light'] .profile-menu {
@@ -396,8 +396,18 @@ html[data-theme='light'] .profile-menu .btn-outline-danger {
 }
 
 html[data-theme='light'] .profile-future-space {
-  background: #c46954;
-  border-top-color: rgba(0, 0, 0, 0.2);
+  background: #111827;
+  border-top-color: #374151;
+}
+
+html[data-theme='light'] .profile-title-area {
+  background: #bfdbfe;
+  border-color: #93c5fd;
+}
+
+html[data-theme='light'] .profile-stat-card {
+  background: #bfdbfe;
+  border-color: #93c5fd;
 }
 
 html[data-theme='light'] .profile-menu,
