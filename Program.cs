@@ -61,20 +61,32 @@ using (var scope = app.Services.CreateScope())
     using (var cmd = dbConnection.CreateCommand())
     {
         cmd.CommandText = "PRAGMA table_info('MedyaOgeleri');";
-        using var reader = cmd.ExecuteReader();
         var hasIzlendi = false;
-        while (reader.Read())
+        var hasAppUserId = false;
         {
-            if (string.Equals(reader["name"]?.ToString(), "Izlendi", StringComparison.OrdinalIgnoreCase))
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
             {
-                hasIzlendi = true;
-                break;
+                if (string.Equals(reader["name"]?.ToString(), "Izlendi", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasIzlendi = true;
+                }
+
+                if (string.Equals(reader["name"]?.ToString(), "AppUserId", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAppUserId = true;
+                }
             }
         }
 
         if (!hasIzlendi)
         {
             db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Izlendi INTEGER NOT NULL DEFAULT 0;");
+        }
+
+        if (!hasAppUserId)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN AppUserId INTEGER NULL;");
         }
 
         db.Database.ExecuteSqlRaw("""

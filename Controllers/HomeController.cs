@@ -1,7 +1,9 @@
 using System.Diagnostics;
+using System.Security.Claims;
 using KategoriSecici.Data;
 using KategoriSecici.Models;
 using KategoriSecici.ViewModels;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -35,17 +37,27 @@ public class HomeController : Controller
     }
 
     [HttpGet]
+    [Authorize]
     public async Task<IActionResult> Index(string lang = "tr", MedyaKategori kategori = MedyaKategori.Film)
     {
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang = NormalizeLang(lang) });
+        }
+
+        await ClaimLegacyUnownedItemsAsync(userId.Value);
+
         var currentLang = NormalizeLang(lang);
         ViewData["Lang"] = currentLang;
         ViewData["SelectedCategory"] = kategori.ToString();
         ViewData["BodyClass"] = "index-page";
-        var model = await BuildViewModelAsync(currentLang, kategori);
+        var model = await BuildViewModelAsync(currentLang, kategori, userId.Value);
         return View(model);
     }
 
     [HttpGet]
+    [Authorize]
     public IActionResult RastgeleKategori(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
@@ -56,10 +68,16 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> Ekle(AnaSayfaViewModel form)
     {
         var lang = NormalizeLang(form.Dil);
         var seciliKategori = form.SeciliKategori;
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang });
+        }
 
         if (string.IsNullOrWhiteSpace(form.YeniOgeAdi))
         {
@@ -72,6 +90,7 @@ public class HomeController : Controller
         {
             Ad = form.YeniOgeAdi.Trim(),
             Kategori = seciliKategori,
+            AppUserId = userId.Value,
             Izlendi = false
         };
 
@@ -86,11 +105,17 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> Sil(int id, MedyaKategori kategori, string dil = "tr")
     {
         var lang = NormalizeLang(dil);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang });
+        }
 
-        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id);
+        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id && x.AppUserId == userId.Value);
         if (kayit is null)
         {
             TempData["Mesaj"] = lang == "en" ? "Item not found." : "Kayit bulunamadi.";
@@ -108,10 +133,17 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> IzledimYap(int id, MedyaKategori kategori, string dil = "tr")
     {
         var lang = NormalizeLang(dil);
-        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang });
+        }
+
+        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id && x.AppUserId == userId.Value);
         if (kayit is null)
         {
             TempData["Mesaj"] = lang == "en" ? "Item not found." : "Kayit bulunamadi.";
@@ -126,10 +158,17 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> ListeyeGeriAl(int id, MedyaKategori kategori, string dil = "tr")
     {
         var lang = NormalizeLang(dil);
-        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang });
+        }
+
+        var kayit = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id && x.AppUserId == userId.Value);
         if (kayit is null)
         {
             TempData["Mesaj"] = lang == "en" ? "Item not found." : "Kayit bulunamadi.";
@@ -144,11 +183,18 @@ public class HomeController : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    [Authorize]
     public async Task<IActionResult> RastgeleSec(MedyaKategori kategori, string dil = "tr")
     {
         var lang = NormalizeLang(dil);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang });
+        }
+
         var kayitlar = await _dbContext.MedyaOgeleri
-            .Where(x => x.Kategori == kategori && !x.Izlendi)
+            .Where(x => x.Kategori == kategori && !x.Izlendi && x.AppUserId == userId.Value)
             .Select(x => x.Ad)
             .ToListAsync();
 
@@ -170,6 +216,7 @@ public class HomeController : Controller
     }
 
     [HttpGet]
+    [Authorize]
     public IActionResult Settings(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
@@ -185,16 +232,17 @@ public class HomeController : Controller
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
     }
 
-    private async Task<AnaSayfaViewModel> BuildViewModelAsync(string? lang, MedyaKategori seciliKategori)
+    private async Task<AnaSayfaViewModel> BuildViewModelAsync(string? lang, MedyaKategori seciliKategori, int userId)
     {
         var currentLang = NormalizeLang(lang);
 
         var seciliListe = await _dbContext.MedyaOgeleri
-            .Where(x => x.Kategori == seciliKategori)
+            .Where(x => x.Kategori == seciliKategori && x.AppUserId == userId)
             .OrderBy(x => x.Ad)
             .ToListAsync();
 
         var adetler = await _dbContext.MedyaOgeleri
+            .Where(x => x.AppUserId == userId)
             .GroupBy(x => x.Kategori)
             .Select(g => new { Kategori = g.Key, Adet = g.Count() })
             .ToListAsync();
@@ -222,5 +270,33 @@ public class HomeController : Controller
     private static string NormalizeLang(string? lang)
     {
         return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var idValue = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(idValue, out var id) ? id : null;
+    }
+
+    private async Task ClaimLegacyUnownedItemsAsync(int userId)
+    {
+        var userOwnedCount = await _dbContext.MedyaOgeleri.CountAsync(x => x.AppUserId == userId);
+        if (userOwnedCount > 0)
+        {
+            return;
+        }
+
+        var legacyRows = await _dbContext.MedyaOgeleri.Where(x => x.AppUserId == null).ToListAsync();
+        if (legacyRows.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var row in legacyRows)
+        {
+            row.AppUserId = userId;
+        }
+
+        await _dbContext.SaveChangesAsync();
     }
 }
