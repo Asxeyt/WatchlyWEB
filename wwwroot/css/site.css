@@ -367,10 +367,13 @@ html[data-theme='light'] .profile-shell {
 
 html[data-theme='light'] .profile-title-area,
 html[data-theme='light'] .profile-subtitle,
+html[data-theme='light'] .profile-name-lg {
+  color: #000000 !important;
+}
+
 html[data-theme='light'] .profile-stat-card,
 html[data-theme='light'] .profile-stat-number,
-html[data-theme='light'] .profile-stat-label,
-html[data-theme='light'] .profile-name-lg {
+html[data-theme='light'] .profile-stat-label {
   color: #c46954 !important;
 }
 

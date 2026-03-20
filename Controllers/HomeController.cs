@@ -224,6 +224,12 @@ public class HomeController : Controller
     {
         var currentLang = NormalizeLang(lang);
         var query = (q ?? string.Empty).Trim();
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return Unauthorized();
+        }
+
         if (query.Length < 2)
         {
             return Json(new
@@ -233,12 +239,21 @@ public class HomeController : Controller
             });
         }
 
-        var results = kategori switch
+        var providerResults = kategori switch
         {
             MedyaKategori.Anime => await SearchJikanAsync(query, true),
             MedyaKategori.Manga => await SearchJikanAsync(query, false),
+            MedyaKategori.Kitap => await SearchOpenLibraryAsync(query),
             _ => new List<CatalogSuggestionViewModel>()
         };
+
+        var listResults = await SearchFromUserListAsync(query, kategori, userId.Value);
+        var results = listResults
+            .Concat(providerResults)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .Take(12)
+            .ToList();
 
         if (results.Count == 0)
         {
@@ -246,6 +261,7 @@ public class HomeController : Controller
             {
                 MedyaKategori.Anime => currentLang == "en" ? "No anime found." : "Boyle bir anime yok.",
                 MedyaKategori.Manga => currentLang == "en" ? "No manga found." : "Boyle bir manga yok.",
+                MedyaKategori.Kitap => currentLang == "en" ? "No book found." : "Boyle bir kitap yok.",
                 _ => currentLang == "en" ? "No result found." : "Sonuc bulunamadi."
             };
 
@@ -451,11 +467,88 @@ public class HomeController : Controller
 
                 return new { Item = x, Score = best };
             })
-            .Where(x => x.Score >= 0.40)
+            .Where(x => x.Score >= 0.25)
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Item.Name)
             .Select(x => x.Item)
             .ToList();
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchFromUserListAsync(string query, MedyaKategori kategori, int userId)
+    {
+        var rows = await _dbContext.MedyaOgeleri
+            .Where(x => x.AppUserId == userId && x.Kategori == kategori)
+            .Select(x => x.Ad)
+            .ToListAsync();
+
+        var local = rows
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(x => new CatalogSuggestionViewModel { Name = x })
+            .ToList();
+
+        return RankFuzzy(query, local);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchOpenLibraryAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://openlibrary.org/search.json?q={Uri.EscapeDataString(query)}&limit=20";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("docs", out var docs) || docs.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in docs.EnumerateArray())
+            {
+                var title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var author = string.Empty;
+                if (item.TryGetProperty("author_name", out var authors) &&
+                    authors.ValueKind == JsonValueKind.Array &&
+                    authors.GetArrayLength() > 0)
+                {
+                    author = authors[0].GetString() ?? string.Empty;
+                }
+
+                var year = string.Empty;
+                if (item.TryGetProperty("first_publish_year", out var y) && y.ValueKind == JsonValueKind.Number)
+                {
+                    year = y.GetInt32().ToString();
+                }
+
+                var cover = string.Empty;
+                if (item.TryGetProperty("cover_i", out var coverId) && coverId.ValueKind == JsonValueKind.Number)
+                {
+                    cover = $"https://covers.openlibrary.org/b/id/{coverId.GetInt32()}-M.jpg";
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = author,
+                    PosterUrl = cover,
+                    Overview = year,
+                    Score = year
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
     }
 
     private static double Similarity(string a, string b)
