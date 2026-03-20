@@ -1,0 +1,26 @@
+using System.ComponentModel.DataAnnotations;
+
+namespace KategoriSecici.Models;
+
+public class AppUser
+{
+    public int Id { get; set; }
+
+    [Required]
+    [StringLength(180)]
+    public string Email { get; set; } = string.Empty;
+
+    [StringLength(260)]
+    public string? DisplayName { get; set; }
+
+    [StringLength(1024)]
+    public string? PasswordHash { get; set; }
+
+    [StringLength(30)]
+    public string AuthProvider { get; set; } = "local";
+
+    [StringLength(260)]
+    public string? GoogleSubject { get; set; }
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}

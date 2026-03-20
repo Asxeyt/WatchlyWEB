@@ -1,0 +1,14 @@
+@{
+    var lang = (ViewData["Lang"] as string ?? "tr").ToLowerInvariant();
+    var isEn = lang == "en";
+    ViewData["Title"] = isEn ? "Profile" : "Profil";
+    string T(string tr, string en) => isEn ? en : tr;
+}
+
+<div class="card">
+    <div class="card-body">
+        <h1 class="h3 mb-3">@T("Profil", "Profile")</h1>
+        <p class="mb-1"><strong>@T("Ad", "Name"):</strong> @User.Identity?.Name</p>
+        <p class="mb-0"><strong>@T("E-posta", "E-mail"):</strong> @User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value</p>
+    </div>
+</div>

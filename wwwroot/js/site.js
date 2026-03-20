@@ -6,7 +6,6 @@
   var MUSIC_MODE_KEY = "musicMode";
   var MUSIC_TIME_KEY = "musicTime";
   var MUSIC_VOLUME_KEY = "musicVolume";
-  var PROFILE_KEY = "userProfile";
 
   function normalizeVolume(value) {
     var parsed = Number(value);
@@ -183,124 +182,6 @@
     window.location.href = url.toString();
   }
 
-  function getProfile() {
-    try {
-      var parsed = JSON.parse(localStorage.getItem(PROFILE_KEY) || "null");
-      if (!parsed || !parsed.name || !parsed.handle) return null;
-      return parsed;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function getInitials(name) {
-    if (!name) return "P";
-    var parts = name.trim().split(/\s+/).slice(0, 2);
-    var letters = parts.map(function (p) { return p.charAt(0).toUpperCase(); }).join("");
-    return letters || "P";
-  }
-
-  function updateProfileAvatar(profile) {
-    var avatars = document.querySelectorAll(".js-profile-avatar");
-    avatars.forEach(function (avatar) {
-      if (profile && profile.avatarUrl) {
-        avatar.innerHTML = '<img alt="avatar" src="' + profile.avatarUrl + '" />';
-      } else {
-        avatar.textContent = getInitials(profile ? profile.name : "P");
-      }
-    });
-  }
-
-  function escapeHtml(value) {
-    return String(value || "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
-  }
-
-  function renderProfileMenu() {
-    var profile = getProfile();
-    var menu = document.getElementById("profileMenuContent");
-    var navText = document.getElementById("profileNavText");
-    if (!menu || !navText) return;
-
-    if (!profile) {
-      navText.textContent = "Profil";
-      updateProfileAvatar(null);
-      menu.innerHTML =
-        '<div class="profile-block">' +
-        '<p class="mb-2 fw-bold">Kayıtlı profil yok</p>' +
-        '<button type="button" class="btn btn-primary btn-sm" onclick="openProfileModal()">Kaydol</button>' +
-        "</div>";
-      return;
-    }
-
-    navText.textContent = profile.name;
-    updateProfileAvatar(profile);
-    menu.innerHTML =
-      '<div class="profile-block border-bottom">' +
-      '<p class="profile-name">' + escapeHtml(profile.name) + "</p>" +
-      '<p class="profile-handle">@' + escapeHtml(profile.handle) + "</p>" +
-      "</div>" +
-      '<div class="profile-block d-grid gap-2">' +
-      '<button type="button" class="btn btn-outline-secondary btn-sm" onclick="openProfileModal()">Profili duzenle</button>' +
-      '<button type="button" class="btn btn-outline-danger btn-sm" onclick="clearProfile()">Oturumu kapat</button>' +
-      "</div>";
-  }
-
-  function initProfileForm() {
-    var form = document.getElementById("profileForm");
-    if (!form) return;
-
-    form.addEventListener("submit", function (e) {
-      e.preventDefault();
-      var nameInput = document.getElementById("profileName");
-      var handleInput = document.getElementById("profileHandle");
-      var avatarInput = document.getElementById("profileAvatar");
-      if (!nameInput || !handleInput || !avatarInput) return;
-
-      var profile = {
-        name: nameInput.value.trim(),
-        handle: handleInput.value.trim().replace(/^@+/, ""),
-        avatarUrl: avatarInput.value.trim()
-      };
-
-      if (!profile.name || !profile.handle) return;
-
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-      renderProfileMenu();
-
-      var modalElement = document.getElementById("profileModal");
-      if (modalElement && window.bootstrap) {
-        window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
-      }
-    });
-  }
-
-  function openProfileModal() {
-    var profile = getProfile();
-    var nameInput = document.getElementById("profileName");
-    var handleInput = document.getElementById("profileHandle");
-    var avatarInput = document.getElementById("profileAvatar");
-    if (!nameInput || !handleInput || !avatarInput) return;
-
-    nameInput.value = profile ? profile.name : "";
-    handleInput.value = profile ? profile.handle : "";
-    avatarInput.value = profile ? (profile.avatarUrl || "") : "";
-
-    var modalElement = document.getElementById("profileModal");
-    if (modalElement && window.bootstrap) {
-      window.bootstrap.Modal.getOrCreateInstance(modalElement).show();
-    }
-  }
-
-  function clearProfile() {
-    localStorage.removeItem(PROFILE_KEY);
-    renderProfileMenu();
-  }
-
   var initialMusicMode = localStorage.getItem(MUSIC_MODE_KEY) || 'off';
   applyMusic(initialMusicMode === 'on' ? 'on' : 'off');
 
@@ -316,8 +197,6 @@
     applyMusicVolume(value);
   };
   window.setLanguage = setLanguage;
-  window.openProfileModal = openProfileModal;
-  window.clearProfile = clearProfile;
 
   document.addEventListener("click", function () {
     if (!pendingMusicStart) {
@@ -337,6 +216,4 @@
 
   applyMusicVolume(getStoredVolume());
   initMusicVolumeControl();
-  initProfileForm();
-  renderProfileMenu();
 })();

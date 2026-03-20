@@ -1,11 +1,14 @@
 @{
     var lang = (ViewData["Lang"] as string ?? Context.Request.Query["lang"].ToString()).ToLowerInvariant();
-    var selectedCategory = ViewData["SelectedCategory"] as string;
+    var hideTopNav = (ViewData["HideTopNav"] as bool?) == true;
     if (lang != "en")
     {
         lang = "tr";
     }
     string T(string tr, string en) => lang == "en" ? en : tr;
+    var isAuth = User.Identity?.IsAuthenticated == true;
+    var userDisplay = User.Identity?.Name ?? (lang == "en" ? "Profile" : "Profil");
+    var userEmail = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
 }
 <!DOCTYPE html>
 <html lang="@lang">
@@ -24,59 +27,85 @@
     <link rel="stylesheet" href="~/KategoriSecici.styles.css" asp-append-version="true" />
 </head>
 <body class="@(ViewData["BodyClass"] as string ?? string.Empty)">
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="RastgeleKategori" asp-route-lang="@lang">KategoriSecici</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div id="mainNav" class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Anasayfa" asp-route-lang="@lang">@T("Anasayfa", "Home")</a>
-                        </li>
-                    </ul>
-                    <ul class="navbar-nav ms-auto">
-                        <li class="nav-item dropdown me-2">
-                            <button class="nav-link text-dark settings-nav-link dropdown-toggle btn btn-link" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="settings-icon" aria-hidden="true">&#9881;</span>
-                                <span>@T("Ayarlar", "Settings")</span>
-                            </button>
-                            <div class="dropdown-menu dropdown-menu-end p-3 quick-settings-menu">
-                                <div class="quick-section-title">@T("Dil", "Language")</div>
-                                <div class="d-flex gap-2 mb-3">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setLanguage('tr')">Turkce</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setLanguage('en')">English</button>
-                                </div>
+    @if (!hideTopNav)
+    {
+        <header>
+            <nav class="navbar navbar-expand-sm navbar-light bg-white border-bottom box-shadow mb-3">
+                <div class="container-fluid">
+                    <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="RastgeleKategori" asp-route-lang="@lang">KategoriSecici</a>
+                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav" aria-controls="mainNav" aria-expanded="false" aria-label="Toggle navigation">
+                        <span class="navbar-toggler-icon"></span>
+                    </button>
+                    <div id="mainNav" class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
+                        <ul class="navbar-nav">
+                            <li class="nav-item">
+                                <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Anasayfa" asp-route-lang="@lang">@T("Anasayfa", "Home")</a>
+                            </li>
+                        </ul>
+                        <ul class="navbar-nav ms-auto align-items-center">
+                            <li class="nav-item dropdown me-3">
+                                <button class="nav-link text-dark settings-nav-link dropdown-toggle btn btn-link" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="settings-icon" aria-hidden="true">&#9881;</span>
+                                    <span>@T("Ayarlar", "Settings")</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end p-3 quick-settings-menu">
+                                    <div class="quick-section-title">@T("Dil", "Language")</div>
+                                    <div class="d-flex gap-2 mb-3">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setLanguage('tr')">Turkce</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setLanguage('en')">English</button>
+                                    </div>
 
-                                <div class="quick-section-title">@T("Tema", "Theme")</div>
-                                <div class="d-flex gap-2 mb-3">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setTheme('dark')">Dark</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setTheme('light')">Light</button>
-                                </div>
+                                    <div class="quick-section-title">@T("Tema", "Theme")</div>
+                                    <div class="d-flex gap-2 mb-3">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setTheme('dark')">Dark</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setTheme('light')">Light</button>
+                                    </div>
 
-                                <div class="quick-section-title">@T("Muzik", "Music")</div>
-                                <div class="d-flex gap-2 mb-2">
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setMusic('on')">@T("Ac", "On")</button>
-                                    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setMusic('off')">@T("Kapat", "Off")</button>
+                                    <div class="quick-section-title">@T("Muzik", "Music")</div>
+                                    <div class="d-flex gap-2 mb-2">
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setMusic('on')">@T("Ac", "On")</button>
+                                        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="setMusic('off')">@T("Kapat", "Off")</button>
+                                    </div>
+                                    <input type="range" min="0" max="100" step="1" value="35" data-music-volume class="form-range mb-0" />
                                 </div>
-                                <input type="range" min="0" max="100" step="1" value="35" data-music-volume class="form-range mb-0" />
-                            </div>
-                        </li>
-                        <li class="nav-item dropdown">
-                            <button class="nav-link text-dark profile-nav-link dropdown-toggle btn btn-link p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
-                                <span class="profile-avatar js-profile-avatar" aria-hidden="true">P</span>
-                                <span id="profileNavText">@T("Profil", "Profile")</span>
-                            </button>
-                            <div class="dropdown-menu dropdown-menu-end p-0 profile-menu" id="profileMenuContent">
-                            </div>
-                        </li>
-                    </ul>
+                            </li>
+
+                            <li class="nav-item dropdown">
+                                <button class="nav-link text-dark profile-nav-link dropdown-toggle btn btn-link p-0" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                                    <span class="profile-avatar" aria-hidden="true">@((userDisplay.Length > 0 ? userDisplay[0] : 'P').ToString().ToUpper())</span>
+                                    <span>@(isAuth ? userDisplay : T("Profil", "Profile"))</span>
+                                </button>
+                                <div class="dropdown-menu dropdown-menu-end p-0 profile-menu">
+                                    @if (!isAuth)
+                                    {
+                                        <div class="profile-block">
+                                            <p class="mb-2 fw-bold">@T("Kayitli profil yok", "No registered profile")</p>
+                                            <a class="btn btn-warning btn-sm me-2" asp-controller="Account" asp-action="Register" asp-route-lang="@lang">@T("Kaydol", "Sign up")</a>
+                                            <a class="btn btn-outline-light btn-sm" asp-controller="Account" asp-action="Login" asp-route-lang="@lang">@T("Giris", "Sign in")</a>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="profile-block border-bottom">
+                                            <p class="profile-name">@userDisplay</p>
+                                            <p class="profile-handle">@userEmail</p>
+                                        </div>
+                                        <div class="profile-block d-grid gap-2">
+                                            <a class="btn btn-outline-secondary btn-sm" asp-controller="Account" asp-action="Profile" asp-route-lang="@lang">@T("Profilimi Ac", "Open Profile")</a>
+                                            <form asp-controller="Account" asp-action="Logout" asp-route-lang="@lang" method="post">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" class="btn btn-outline-danger btn-sm w-100">@T("Oturumu kapat", "Sign out")</button>
+                                            </form>
+                                        </div>
+                                    }
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
-            </div>
-        </nav>
-    </header>
+            </nav>
+        </header>
+    }
     <div class="container">
         <main role="main" class="pb-3">
             @RenderBody()
@@ -87,36 +116,6 @@
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
 
-    <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">@T("Profil Kaydi", "Profile Registration")</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                </div>
-                <form id="profileForm">
-                    <div class="modal-body">
-                        <div class="mb-2">
-                            <label class="form-label" for="profileName">@T("Ad", "Name")</label>
-                            <input id="profileName" class="form-control" maxlength="40" required />
-                        </div>
-                        <div class="mb-2">
-                            <label class="form-label" for="profileHandle">@T("Kullanici adi", "Username")</label>
-                            <input id="profileHandle" class="form-control" maxlength="40" required />
-                        </div>
-                        <div>
-                            <label class="form-label" for="profileAvatar">@T("Avatar (istege bagli URL)", "Avatar (optional URL)")</label>
-                            <input id="profileAvatar" class="form-control" maxlength="240" />
-                        </div>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@T("Kapat", "Close")</button>
-                        <button type="submit" class="btn btn-primary">@T("Kaydet", "Save")</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    </div>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

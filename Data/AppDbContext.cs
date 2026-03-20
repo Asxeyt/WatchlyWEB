@@ -11,4 +11,5 @@ public class AppDbContext : DbContext
     }
 
     public DbSet<MedyaOgesi> MedyaOgeleri => Set<MedyaOgesi>();
+    public DbSet<AppUser> AppUsers => Set<AppUser>();
 }
