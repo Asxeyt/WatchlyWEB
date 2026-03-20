@@ -22,9 +22,9 @@
                     <input type="hidden" asp-for="Lang" />
                     <input type="hidden" asp-for="ReturnUrl" />
 
-                    <label class="form-label auth-label" asp-for="DisplayName">@T("Gorunen ad", "Display name")</label>
-                    <input asp-for="DisplayName" class="form-control auth-input" />
-                    <span asp-validation-for="DisplayName" class="text-danger"></span>
+                    <label class="form-label auth-label" asp-for="UserName">@T("Kullanici adi", "Username")</label>
+                    <input asp-for="UserName" class="form-control auth-input" />
+                    <span asp-validation-for="UserName" class="text-danger"></span>
 
                     <label class="form-label auth-label mt-3" asp-for="Email">@T("E-posta", "E-mail")</label>
                     <input asp-for="Email" class="form-control auth-input" />

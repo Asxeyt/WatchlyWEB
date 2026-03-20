@@ -122,6 +122,7 @@ using (var scope = app.Services.CreateScope())
         db.Database.ExecuteSqlRaw("""
             CREATE TABLE IF NOT EXISTS AppUsers (
                 Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                UserName TEXT NOT NULL DEFAULT '',
                 Email TEXT NOT NULL,
                 DisplayName TEXT NULL,
                 PasswordHash TEXT NULL,
@@ -136,6 +137,7 @@ using (var scope = app.Services.CreateScope())
 
         using var userCmd = dbConnection.CreateCommand();
         userCmd.CommandText = "PRAGMA table_info('AppUsers');";
+        var hasUserName = false;
         var hasCoverImagePath = false;
         var hasAvatarImagePath = false;
         using (var userReader = userCmd.ExecuteReader())
@@ -143,6 +145,10 @@ using (var scope = app.Services.CreateScope())
             while (userReader.Read())
             {
                 var col = userReader["name"]?.ToString();
+                if (string.Equals(col, "UserName", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasUserName = true;
+                }
                 if (string.Equals(col, "CoverImagePath", StringComparison.OrdinalIgnoreCase))
                 {
                     hasCoverImagePath = true;
@@ -154,6 +160,11 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
+        if (!hasUserName)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN UserName TEXT NULL;");
+        }
+
         if (!hasCoverImagePath)
         {
             db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN CoverImagePath TEXT NULL;");
@@ -163,6 +174,50 @@ using (var scope = app.Services.CreateScope())
         {
             db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarImagePath TEXT NULL;");
         }
+
+        var users = db.AppUsers.OrderBy(x => x.Id).ToList();
+        var used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var u in users)
+        {
+            var baseName = string.IsNullOrWhiteSpace(u.UserName)
+                ? (string.IsNullOrWhiteSpace(u.DisplayName) ? u.Email.Split('@')[0] : u.DisplayName)
+                : u.UserName;
+
+            var normalized = new string(baseName.Where(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '.').ToArray());
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                normalized = "kullanici";
+            }
+
+            if (normalized.Length > 40)
+            {
+                normalized = normalized[..40];
+            }
+
+            var unique = normalized;
+            var i = 1;
+            while (used.Contains(unique))
+            {
+                unique = normalized;
+                var suffix = i.ToString();
+                if (unique.Length + suffix.Length > 40)
+                {
+                    unique = unique[..(40 - suffix.Length)];
+                }
+                unique += suffix;
+                i++;
+            }
+
+            used.Add(unique);
+            u.UserName = unique;
+            if (string.IsNullOrWhiteSpace(u.DisplayName))
+            {
+                u.DisplayName = unique;
+            }
+        }
+
+        db.SaveChanges();
+        db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_AppUsers_UserName ON AppUsers (UserName);");
     }
     SeedData.Initialize(db);
 }

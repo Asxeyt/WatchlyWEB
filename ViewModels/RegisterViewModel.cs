@@ -5,8 +5,8 @@ namespace KategoriSecici.ViewModels;
 public class RegisterViewModel
 {
     [Required]
-    [StringLength(60)]
-    public string DisplayName { get; set; } = string.Empty;
+    [StringLength(40)]
+    public string UserName { get; set; } = string.Empty;
 
     [Required]
     [EmailAddress]

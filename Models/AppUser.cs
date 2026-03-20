@@ -7,6 +7,10 @@ public class AppUser
     public int Id { get; set; }
 
     [Required]
+    [StringLength(40)]
+    public string UserName { get; set; } = string.Empty;
+
+    [Required]
     [StringLength(180)]
     public string Email { get; set; } = string.Empty;
 

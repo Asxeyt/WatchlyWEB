@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
 
 namespace KategoriSecici.Controllers;
 
@@ -120,10 +121,25 @@ public class AccountController : Controller
             return View(model);
         }
 
+        var requestedUserName = NormalizeUserName(model.UserName);
+        if (string.IsNullOrWhiteSpace(requestedUserName))
+        {
+            model.ErrorMessage = model.Lang == "en" ? "Username is invalid." : "Kullanici adi gecersiz.";
+            return View(model);
+        }
+
+        var userNameTaken = await _dbContext.AppUsers.AnyAsync(x => x.UserName.ToLower() == requestedUserName.ToLower());
+        if (userNameTaken)
+        {
+            model.ErrorMessage = model.Lang == "en" ? "Username is already taken." : "Bu kullanici adi dolu.";
+            return View(model);
+        }
+
         var user = new AppUser
         {
+            UserName = requestedUserName,
             Email = email,
-            DisplayName = model.DisplayName.Trim(),
+            DisplayName = requestedUserName,
             AuthProvider = "local"
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, model.Password);
@@ -178,6 +194,7 @@ public class AccountController : Controller
         {
             user = new AppUser
             {
+                UserName = await GenerateUniqueUserNameAsync(email.Split('@')[0]),
                 Email = email,
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName,
                 AuthProvider = "google",
@@ -189,6 +206,10 @@ public class AccountController : Controller
         {
             user.AuthProvider = "google";
             user.GoogleSubject = sub;
+            if (string.IsNullOrWhiteSpace(user.UserName))
+            {
+                user.UserName = await GenerateUniqueUserNameAsync(email.Split('@')[0]);
+            }
             if (string.IsNullOrWhiteSpace(user.DisplayName) && !string.IsNullOrWhiteSpace(displayName))
             {
                 user.DisplayName = displayName;
@@ -206,6 +227,55 @@ public class AccountController : Controller
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction(nameof(Login), new { lang = NormalizeLang(lang) });
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> DeleteAccount(DeleteAccountViewModel model)
+    {
+        var lang = NormalizeLang(model.Lang);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction(nameof(Login), new { lang });
+        }
+
+        var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == userId.Value);
+        if (user is null)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(Login), new { lang });
+        }
+
+        if (string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            TempData["AccountDeleteError"] = lang == "en"
+                ? "Google account deletion from this button is disabled. Contact support."
+                : "Google hesabi icin bu butondan silme kapali.";
+            return RedirectBackOrProfile(lang);
+        }
+
+        var verify = _passwordHasher.VerifyHashedPassword(user, user.PasswordHash, model.Password ?? string.Empty);
+        if (verify == PasswordVerificationResult.Failed)
+        {
+            TempData["AccountDeleteError"] = lang == "en" ? "Wrong password." : "Parola yanlis.";
+            return RedirectBackOrProfile(lang);
+        }
+
+        var userItems = await _dbContext.MedyaOgeleri.Where(x => x.AppUserId == user.Id).ToListAsync();
+        _dbContext.MedyaOgeleri.RemoveRange(userItems);
+        _dbContext.AppUsers.Remove(user);
+        await _dbContext.SaveChangesAsync();
+
+        var userDir = Path.Combine(_environment.WebRootPath, "user-media", user.Id.ToString());
+        if (Directory.Exists(userDir))
+        {
+            Directory.Delete(userDir, true);
+        }
+
+        await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+        return RedirectToAction(nameof(Register), new { lang });
     }
 
     [Authorize]
@@ -240,7 +310,7 @@ public class AccountController : Controller
         var vm = new ProfileViewModel
         {
             Lang = currentLang,
-            DisplayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Email : user.DisplayName,
+            DisplayName = string.IsNullOrWhiteSpace(user.UserName) ? user.Email : user.UserName,
             CoverImagePath = user.CoverImagePath,
             AvatarImagePath = user.AvatarImagePath,
             AnimeCount = CountFor(MedyaKategori.Anime),
@@ -302,7 +372,7 @@ public class AccountController : Controller
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-            new(ClaimTypes.Name, user.DisplayName ?? user.Email),
+            new(ClaimTypes.Name, user.UserName),
             new(ClaimTypes.Email, user.Email)
         };
 
@@ -338,6 +408,18 @@ public class AccountController : Controller
         return int.TryParse(raw, out var id) ? id : null;
     }
 
+    private IActionResult RedirectBackOrProfile(string lang)
+    {
+        if (Request.Headers.TryGetValue("Referer", out StringValues referer) &&
+            Uri.TryCreate(referer.ToString(), UriKind.Absolute, out var refererUri) &&
+            string.Equals(refererUri.Host, Request.Host.Host, StringComparison.OrdinalIgnoreCase))
+        {
+            return Redirect(refererUri.PathAndQuery);
+        }
+
+        return RedirectToAction(nameof(Profile), new { lang });
+    }
+
     private static async Task<string?> SaveImageAsync(IFormFile file, string directory, string baseName)
     {
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
@@ -357,5 +439,40 @@ public class AccountController : Controller
         await using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
         await file.CopyToAsync(stream);
         return fileName;
+    }
+
+    private static string NormalizeUserName(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var filtered = new string(value.Trim().Where(ch =>
+            char.IsLetterOrDigit(ch) || ch == '_' || ch == '.').ToArray());
+        return filtered.Length > 40 ? filtered[..40] : filtered;
+    }
+
+    private async Task<string> GenerateUniqueUserNameAsync(string seed)
+    {
+        var baseName = NormalizeUserName(seed);
+        if (string.IsNullOrWhiteSpace(baseName))
+        {
+            baseName = "kullanici";
+        }
+
+        var candidate = baseName;
+        var i = 1;
+        while (await _dbContext.AppUsers.AnyAsync(x => x.UserName.ToLower() == candidate.ToLower()))
+        {
+            candidate = $"{baseName}{i}";
+            if (candidate.Length > 40)
+            {
+                candidate = candidate[..40];
+            }
+            i++;
+        }
+
+        return candidate;
     }
 }
