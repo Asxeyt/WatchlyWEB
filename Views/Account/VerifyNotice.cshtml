@@ -46,6 +46,15 @@
                     <button type="submit" class="btn auth-primary-btn w-100 mt-3">@T("Kodu dogrula", "Verify code")</button>
                 </form>
 
+                <form asp-controller="Account" asp-action="ResendVerifyCode" method="post" class="mt-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="lang" value="@lang" />
+                    <input type="hidden" name="email" value="@email" />
+                    <button type="submit" class="btn btn-outline-secondary w-100">
+                        @T("Kodu tekrar gonder", "Resend code")
+                    </button>
+                </form>
+
                 <div class="mt-3">
                     <a class="btn btn-dark" asp-controller="Account" asp-action="Login" asp-route-lang="@lang">@T("Giris sayfasina don", "Back to login")</a>
                 </div>

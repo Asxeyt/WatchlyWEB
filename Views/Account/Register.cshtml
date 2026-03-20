@@ -10,7 +10,7 @@
         <img src="~/images/login-hero.png" alt="hero" class="auth-hero-image" onerror="this.style.display='none'" />
         <div class="card auth-card">
             <div class="card-body p-4">
-                <h1 class="auth-title">@T("Yeni hesap oluştur", "Create your account")</h1>
+                <h1 class="auth-title">@T("Yeni hesap olustur", "Create your account")</h1>
 
                 @if (!string.IsNullOrWhiteSpace(Model.ErrorMessage))
                 {
@@ -22,13 +22,9 @@
                     <input type="hidden" asp-for="Lang" />
                     <input type="hidden" asp-for="ReturnUrl" />
 
-                    <label class="form-label auth-label" asp-for="UserName">@T("Kullanıcı adı", "Username")</label>
+                    <label class="form-label auth-label" asp-for="UserName">@T("Kullanici adi", "Username")</label>
                     <input asp-for="UserName" class="form-control auth-input" />
                     <span asp-validation-for="UserName" class="text-danger"></span>
-
-                    <label class="form-label auth-label mt-3" asp-for="Email">@T("E-posta", "E-mail")</label>
-                    <input asp-for="Email" class="form-control auth-input" />
-                    <span asp-validation-for="Email" class="text-danger"></span>
 
                     <label class="form-label auth-label mt-3" asp-for="Password">@T("Parola", "Password")</label>
                     <input asp-for="Password" class="form-control auth-input" />
@@ -40,17 +36,11 @@
 
                     <button type="submit" class="btn auth-primary-btn w-100 mt-4">@T("Kaydol", "Sign up")</button>
                 </form>
-
-                <div class="text-center mt-4">
-                    <a class="google-circle-btn" asp-controller="Account" asp-action="GoogleLogin" asp-route-lang="@Model.Lang" asp-route-returnUrl="@Model.ReturnUrl" title="Google ile giriş">
-                        G
-                    </a>
-                </div>
             </div>
         </div>
         <p class="auth-bottom-link">
-            @T("Zaten hesabın var mı?", "Already have an account?")
-            <a asp-controller="Account" asp-action="Login" asp-route-lang="@Model.Lang" asp-route-returnUrl="@Model.ReturnUrl">@T("Giriş yap.", "Sign in.")</a>
+            @T("Zaten hesabin var mi?", "Already have an account?")
+            <a asp-controller="Account" asp-action="Login" asp-route-lang="@Model.Lang" asp-route-returnUrl="@Model.ReturnUrl">@T("Giris yap.", "Sign in.")</a>
         </p>
     </div>
 </div>

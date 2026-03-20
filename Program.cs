@@ -55,6 +55,13 @@ else
     connectionString = $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "kategorisecici.db")}";
 }
 
+var keyStorePath = Path.Combine(builder.Environment.ContentRootPath, ".keys");
+if (!string.IsNullOrWhiteSpace(renderDiskPath))
+{
+    keyStorePath = Path.Combine(renderDiskPath, "keys");
+}
+Directory.CreateDirectory(keyStorePath);
+
 builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(connectionString));
@@ -90,7 +97,7 @@ if (!string.IsNullOrWhiteSpace(googleClientId) && !string.IsNullOrWhiteSpace(goo
 builder.Services.AddAuthorization();
 
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(builder.Environment.ContentRootPath, ".keys")))
+    .PersistKeysToFileSystem(new DirectoryInfo(keyStorePath))
     .SetApplicationName("KategoriSecici");
 
 var app = builder.Build();

@@ -8,7 +8,6 @@
     string T(string tr, string en) => lang == "en" ? en : tr;
     var isAuth = User.Identity?.IsAuthenticated == true;
     var userDisplay = User.Identity?.Name ?? (lang == "en" ? "Profile" : "Profil");
-    var userEmail = User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value ?? "";
 }
 <!DOCTYPE html>
 <html lang="@lang">
@@ -88,7 +87,7 @@
                                     {
                                         <div class="profile-block border-bottom">
                                             <p class="profile-name">@userDisplay</p>
-                                            <p class="profile-handle">@userEmail</p>
+                                            <p class="profile-handle">@T("Kisisel profil", "Personal profile")</p>
                                         </div>
                                         <div class="profile-block d-grid gap-2">
                                             <a class="btn btn-outline-secondary btn-sm" asp-controller="Account" asp-action="Profile" asp-route-lang="@lang">@T("Profilimi Ac", "Open Profile")</a>
