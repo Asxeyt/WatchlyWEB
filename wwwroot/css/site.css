@@ -326,7 +326,11 @@ body {
 }
 
 .profile-title-area {
-  color: #000000;
+  color: #c46954;
+  background: #000000;
+  border: 1px solid #c46954;
+  border-radius: 12px;
+  padding: 0.65rem 0.9rem;
 }
 
 .profile-name-lg {
@@ -337,7 +341,7 @@ body {
 
 .profile-subtitle {
   margin: 0.35rem 0 0;
-  color: #000000;
+  color: #c46954;
 }
 
 .profile-stats-grid {
@@ -368,7 +372,7 @@ html[data-theme='light'] .profile-shell {
 html[data-theme='light'] .profile-title-area,
 html[data-theme='light'] .profile-subtitle,
 html[data-theme='light'] .profile-name-lg {
-  color: #000000 !important;
+  color: #c46954 !important;
 }
 
 html[data-theme='light'] .profile-stat-card,

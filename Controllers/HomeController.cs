@@ -244,6 +244,9 @@ public class HomeController : Controller
             MedyaKategori.Anime => await SearchJikanAsync(query, true),
             MedyaKategori.Manga => await SearchJikanAsync(query, false),
             MedyaKategori.Kitap => await SearchOpenLibraryAsync(query),
+            MedyaKategori.Dizi => await SearchTvMazeAsync(query),
+            MedyaKategori.Film => await SearchMoviesAsync(query),
+            MedyaKategori.Oyun => await SearchSteamAsync(query),
             _ => new List<CatalogSuggestionViewModel>()
         };
 
@@ -262,6 +265,9 @@ public class HomeController : Controller
                 MedyaKategori.Anime => currentLang == "en" ? "No anime found." : "Boyle bir anime yok.",
                 MedyaKategori.Manga => currentLang == "en" ? "No manga found." : "Boyle bir manga yok.",
                 MedyaKategori.Kitap => currentLang == "en" ? "No book found." : "Boyle bir kitap yok.",
+                MedyaKategori.Dizi => currentLang == "en" ? "No series found." : "Boyle bir dizi yok.",
+                MedyaKategori.Film => currentLang == "en" ? "No movie found." : "Boyle bir film yok.",
+                MedyaKategori.Oyun => currentLang == "en" ? "No game found." : "Boyle bir oyun yok.",
                 _ => currentLang == "en" ? "No result found." : "Sonuc bulunamadi."
             };
 
@@ -540,6 +546,238 @@ public class HomeController : Controller
                     PosterUrl = cover,
                     Overview = year,
                     Score = year
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchTvMazeAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://api.tvmaze.com/search/shows?q={Uri.EscapeDataString(query)}";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var row in doc.RootElement.EnumerateArray())
+            {
+                if (!row.TryGetProperty("show", out var show))
+                {
+                    continue;
+                }
+
+                var title = show.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var genres = string.Empty;
+                if (show.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array)
+                {
+                    genres = string.Join(", ", gs.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
+
+                var rating = string.Empty;
+                if (show.TryGetProperty("rating", out var ratingObj) &&
+                    ratingObj.TryGetProperty("average", out var avg) &&
+                    avg.ValueKind == JsonValueKind.Number)
+                {
+                    rating = avg.GetDouble().ToString("0.0");
+                }
+
+                var poster = string.Empty;
+                if (show.TryGetProperty("image", out var imageObj) &&
+                    imageObj.TryGetProperty("medium", out var medium))
+                {
+                    poster = medium.GetString() ?? string.Empty;
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = genres,
+                    PosterUrl = poster,
+                    Overview = string.Empty,
+                    Score = rating
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchMoviesAsync(string query)
+    {
+        var fromYts = await SearchYtsAsync(query);
+        if (fromYts.Count > 0)
+        {
+            return fromYts;
+        }
+
+        return await SearchOmdbAsync(query);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchYtsAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://yts.mx/api/v2/list_movies.json?query_term={Uri.EscapeDataString(query)}&limit=20&sort_by=rating";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("movies", out var movies) ||
+                movies.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in movies.EnumerateArray())
+            {
+                var title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var year = item.TryGetProperty("year", out var y) && y.ValueKind == JsonValueKind.Number ? y.GetInt32().ToString() : string.Empty;
+                var score = item.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble().ToString("0.0") : string.Empty;
+                var poster = item.TryGetProperty("medium_cover_image", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = year,
+                    PosterUrl = poster,
+                    Overview = string.Empty,
+                    Score = score
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchOmdbAsync(string query)
+    {
+        var apiKey = Environment.GetEnvironmentVariable("OMDB_API_KEY");
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://www.omdbapi.com/?apikey={Uri.EscapeDataString(apiKey)}&s={Uri.EscapeDataString(query)}&type=movie";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("Search", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in items.EnumerateArray())
+            {
+                var title = item.TryGetProperty("Title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var year = item.TryGetProperty("Year", out var y) ? (y.GetString() ?? string.Empty) : string.Empty;
+                var poster = item.TryGetProperty("Poster", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = year,
+                    PosterUrl = poster == "N/A" ? string.Empty : poster,
+                    Overview = string.Empty,
+                    Score = string.Empty
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchSteamAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://store.steampowered.com/api/storesearch?term={Uri.EscapeDataString(query)}&l=english&cc=us";
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, url);
+            req.Headers.TryAddWithoutValidation("User-Agent", "KategoriSecici/1.0");
+            using var res = await client.SendAsync(req);
+            if (!res.IsSuccessStatusCode)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            await using var stream = await res.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in items.EnumerateArray())
+            {
+                var title = item.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var price = string.Empty;
+                if (item.TryGetProperty("price", out var pr) && pr.ValueKind == JsonValueKind.Object &&
+                    pr.TryGetProperty("final", out var finalPrice) && finalPrice.ValueKind == JsonValueKind.Number)
+                {
+                    price = $"${finalPrice.GetInt32() / 100.0:0.00}";
+                }
+
+                var poster = item.TryGetProperty("tiny_image", out var img) ? (img.GetString() ?? string.Empty) : string.Empty;
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = price,
+                    PosterUrl = poster,
+                    Overview = string.Empty,
+                    Score = string.Empty
                 });
             }
 
