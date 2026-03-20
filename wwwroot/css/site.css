@@ -70,6 +70,9 @@ body {
 .quick-settings-menu {
   min-width: 270px;
   border-radius: 12px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #ffffff;
 }
 
 .quick-section-title {
@@ -77,8 +80,25 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   font-weight: 700;
-  opacity: 0.75;
+  opacity: 1;
+  color: #ffffff;
   margin-bottom: 0.4rem;
+}
+
+.quick-settings-menu .btn-outline-secondary {
+  color: #ffffff;
+  border-color: #64748b;
+}
+
+.quick-settings-menu .btn-outline-secondary:hover,
+.quick-settings-menu .btn-outline-secondary:focus {
+  color: #ffffff;
+  background: #1e293b;
+  border-color: #94a3b8;
+}
+
+.quick-settings-menu .form-range {
+  accent-color: #ffffff;
 }
 
 .profile-nav-link {
