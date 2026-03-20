@@ -20,6 +20,11 @@ public class AppUser
     [StringLength(1024)]
     public string? PasswordHash { get; set; }
 
+    public bool EmailVerified { get; set; } = false;
+
+    [StringLength(120)]
+    public string? EmailVerificationToken { get; set; }
+
     [StringLength(30)]
     public string AuthProvider { get; set; } = "local";
 

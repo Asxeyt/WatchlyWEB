@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using System.Net;
+using System.Net.Mail;
 using KategoriSecici.Data;
 using KategoriSecici.Models;
 using KategoriSecici.ViewModels;
@@ -85,6 +87,14 @@ public class AccountController : Controller
             return View(model);
         }
 
+        if (!user.EmailVerified)
+        {
+            model.ErrorMessage = model.Lang == "en"
+                ? "Please verify your e-mail before signing in."
+                : "Giris yapmadan once e-posta dogrulamasi yapmalisin.";
+            return View(model);
+        }
+
         await SignInAsync(user, model.RememberMe);
         return RedirectToSafeReturn(model.ReturnUrl, model.Lang);
     }
@@ -144,6 +154,8 @@ public class AccountController : Controller
             UserName = requestedUserName,
             Email = email,
             DisplayName = requestedUserName,
+            EmailVerified = false,
+            EmailVerificationToken = Guid.NewGuid().ToString("N"),
             AuthProvider = "local"
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, model.Password);
@@ -151,8 +163,17 @@ public class AccountController : Controller
         _dbContext.AppUsers.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        await SignInAsync(user, true);
-        return RedirectToSafeReturn(model.ReturnUrl, model.Lang);
+        var verifyUrl = Url.Action(nameof(VerifyEmail), "Account",
+            new { lang = model.Lang, email = user.Email, token = user.EmailVerificationToken }, Request.Scheme);
+
+        var sent = await TrySendVerificationEmailAsync(user.Email, verifyUrl ?? string.Empty, model.Lang);
+        return RedirectToAction(nameof(VerifyNotice), new
+        {
+            lang = model.Lang,
+            email = user.Email,
+            sent,
+            fallbackLink = sent ? null : verifyUrl
+        });
     }
 
     [HttpGet]
@@ -201,6 +222,7 @@ public class AccountController : Controller
                 UserName = await GenerateUniqueUserNameAsync(email.Split('@')[0]),
                 Email = email,
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName,
+                EmailVerified = true,
                 AuthProvider = "google",
                 GoogleSubject = sub
             };
@@ -210,6 +232,8 @@ public class AccountController : Controller
         {
             user.AuthProvider = "google";
             user.GoogleSubject = sub;
+            user.EmailVerified = true;
+            user.EmailVerificationToken = null;
             if (string.IsNullOrWhiteSpace(user.UserName))
             {
                 user.UserName = await GenerateUniqueUserNameAsync(email.Split('@')[0]);
@@ -231,6 +255,46 @@ public class AccountController : Controller
     {
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return RedirectToAction(nameof(Login), new { lang = NormalizeLang(lang) });
+    }
+
+    [HttpGet]
+    public IActionResult VerifyNotice(string lang = "tr", string? email = null, bool sent = false, string? fallbackLink = null)
+    {
+        ViewData["Lang"] = NormalizeLang(lang);
+        ViewData["BodyClass"] = "auth-page";
+        ViewData["HideTopNav"] = true;
+        ViewData["VerifyEmail"] = email ?? string.Empty;
+        ViewData["VerifySent"] = sent;
+        ViewData["FallbackLink"] = fallbackLink ?? string.Empty;
+        return View();
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> VerifyEmail(string lang = "tr", string email = "", string token = "")
+    {
+        var currentLang = NormalizeLang(lang);
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail);
+        if (user is null || string.IsNullOrWhiteSpace(user.EmailVerificationToken) || user.EmailVerificationToken != token)
+        {
+            return RedirectToAction(nameof(Login), new
+            {
+                lang = currentLang,
+                errorMessage = currentLang == "en" ? "Verification link is invalid." : "Dogrulama baglantisi gecersiz."
+            });
+        }
+
+        user.EmailVerified = true;
+        user.EmailVerificationToken = null;
+        await _dbContext.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Login), new
+        {
+            lang = currentLang,
+            errorMessage = currentLang == "en"
+                ? "E-mail verified. You can sign in now."
+                : "E-posta dogrulandi. Simdi giris yapabilirsin."
+        });
     }
 
     [Authorize]
@@ -478,5 +542,50 @@ public class AccountController : Controller
         }
 
         return candidate;
+    }
+
+    private async Task<bool> TrySendVerificationEmailAsync(string toEmail, string verifyUrl, string lang)
+    {
+        try
+        {
+            var smtpHost = _configuration["Smtp:Host"] ?? Environment.GetEnvironmentVariable("SMTP_HOST");
+            var smtpPortRaw = _configuration["Smtp:Port"] ?? Environment.GetEnvironmentVariable("SMTP_PORT");
+            var smtpUser = _configuration["Smtp:User"] ?? Environment.GetEnvironmentVariable("SMTP_USER");
+            var smtpPass = _configuration["Smtp:Pass"] ?? Environment.GetEnvironmentVariable("SMTP_PASS");
+            var smtpFrom = _configuration["Smtp:From"] ?? Environment.GetEnvironmentVariable("SMTP_FROM");
+
+            if (string.IsNullOrWhiteSpace(smtpHost) || string.IsNullOrWhiteSpace(smtpPortRaw) || string.IsNullOrWhiteSpace(smtpFrom))
+            {
+                return false;
+            }
+
+            if (!int.TryParse(smtpPortRaw, out var smtpPort))
+            {
+                return false;
+            }
+
+            using var smtp = new SmtpClient(smtpHost, smtpPort)
+            {
+                EnableSsl = true
+            };
+
+            if (!string.IsNullOrWhiteSpace(smtpUser) && !string.IsNullOrWhiteSpace(smtpPass))
+            {
+                smtp.Credentials = new NetworkCredential(smtpUser, smtpPass);
+            }
+
+            var subject = lang == "en" ? "Verify your KategoriSecici e-mail" : "KategoriSecici e-posta dogrulama";
+            var body = lang == "en"
+                ? $"Click this link to verify your e-mail:\n{verifyUrl}"
+                : $"E-postani dogrulamak icin bu baglantiya tikla:\n{verifyUrl}";
+
+            using var message = new MailMessage(smtpFrom, toEmail, subject, body);
+            await smtp.SendMailAsync(message);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }

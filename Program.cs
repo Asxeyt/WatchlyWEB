@@ -17,6 +17,10 @@ if (!string.IsNullOrWhiteSpace(renderPort))
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var explicitDbPath = Environment.GetEnvironmentVariable("DATABASE_PATH");
 var renderDiskPath = Environment.GetEnvironmentVariable("RENDER_DISK_PATH");
+if (string.IsNullOrWhiteSpace(renderDiskPath) && !string.IsNullOrWhiteSpace(renderPort) && Directory.Exists("/var/data"))
+{
+    renderDiskPath = "/var/data";
+}
 
 string connectionString;
 if (!string.IsNullOrWhiteSpace(explicitDbPath))
@@ -135,6 +139,8 @@ using (var scope = app.Services.CreateScope())
                 Email TEXT NOT NULL,
                 DisplayName TEXT NULL,
                 PasswordHash TEXT NULL,
+                EmailVerified INTEGER NOT NULL DEFAULT 0,
+                EmailVerificationToken TEXT NULL,
                 AuthProvider TEXT NOT NULL DEFAULT 'local',
                 GoogleSubject TEXT NULL,
                 CoverImagePath TEXT NULL,
@@ -147,6 +153,8 @@ using (var scope = app.Services.CreateScope())
         using var userCmd = dbConnection.CreateCommand();
         userCmd.CommandText = "PRAGMA table_info('AppUsers');";
         var hasUserName = false;
+        var hasEmailVerified = false;
+        var hasEmailVerificationToken = false;
         var hasCoverImagePath = false;
         var hasAvatarImagePath = false;
         using (var userReader = userCmd.ExecuteReader())
@@ -157,6 +165,14 @@ using (var scope = app.Services.CreateScope())
                 if (string.Equals(col, "UserName", StringComparison.OrdinalIgnoreCase))
                 {
                     hasUserName = true;
+                }
+                if (string.Equals(col, "EmailVerified", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasEmailVerified = true;
+                }
+                if (string.Equals(col, "EmailVerificationToken", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasEmailVerificationToken = true;
                 }
                 if (string.Equals(col, "CoverImagePath", StringComparison.OrdinalIgnoreCase))
                 {
@@ -172,6 +188,14 @@ using (var scope = app.Services.CreateScope())
         if (!hasUserName)
         {
             db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN UserName TEXT NULL;");
+        }
+        if (!hasEmailVerified)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN EmailVerified INTEGER NOT NULL DEFAULT 0;");
+        }
+        if (!hasEmailVerificationToken)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN EmailVerificationToken TEXT NULL;");
         }
 
         if (!hasCoverImagePath)
@@ -222,6 +246,10 @@ using (var scope = app.Services.CreateScope())
             if (string.IsNullOrWhiteSpace(u.DisplayName))
             {
                 u.DisplayName = unique;
+            }
+            if (u.AuthProvider == "google")
+            {
+                u.EmailVerified = true;
             }
         }
 
