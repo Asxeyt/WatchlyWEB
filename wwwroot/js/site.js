@@ -125,7 +125,7 @@
     localStorage.setItem('theme', theme);
   }
 
-  var initialTheme = localStorage.getItem('theme') || 'light';
+  var initialTheme = localStorage.getItem('theme') || 'dark';
   applyTheme(initialTheme);
 
   window.setTheme = function (theme) {
