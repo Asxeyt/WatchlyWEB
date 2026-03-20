@@ -17,12 +17,14 @@ public class AccountController : Controller
     private readonly AppDbContext _dbContext;
     private readonly PasswordHasher<AppUser> _passwordHasher;
     private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
 
-    public AccountController(AppDbContext dbContext, PasswordHasher<AppUser> passwordHasher, IConfiguration configuration)
+    public AccountController(AppDbContext dbContext, PasswordHasher<AppUser> passwordHasher, IConfiguration configuration, IWebHostEnvironment environment)
     {
         _dbContext = dbContext;
         _passwordHasher = passwordHasher;
         _configuration = configuration;
+        _environment = environment;
     }
 
     [HttpGet]
@@ -200,11 +202,91 @@ public class AccountController : Controller
 
     [Authorize]
     [HttpGet]
-    public IActionResult Profile(string lang = "tr")
+    public async Task<IActionResult> Profile(string lang = "tr")
     {
-        ViewData["Lang"] = NormalizeLang(lang);
-        ViewData["BodyClass"] = "settings-page";
-        return View();
+        var currentLang = NormalizeLang(lang);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction(nameof(Login), new { lang = currentLang });
+        }
+
+        var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == userId.Value);
+        if (user is null)
+        {
+            await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+            return RedirectToAction(nameof(Login), new { lang = currentLang });
+        }
+
+        var watchedCounts = await _dbContext.MedyaOgeleri
+            .Where(x => x.AppUserId == user.Id && x.Izlendi)
+            .GroupBy(x => x.Kategori)
+            .Select(g => new { Kategori = g.Key, Count = g.Count() })
+            .ToListAsync();
+
+        int CountFor(MedyaKategori k) => watchedCounts.FirstOrDefault(x => x.Kategori == k)?.Count ?? 0;
+
+        ViewData["Lang"] = currentLang;
+        ViewData["BodyClass"] = "profile-page";
+
+        var vm = new ProfileViewModel
+        {
+            Lang = currentLang,
+            DisplayName = string.IsNullOrWhiteSpace(user.DisplayName) ? user.Email : user.DisplayName,
+            CoverImagePath = user.CoverImagePath,
+            AvatarImagePath = user.AvatarImagePath,
+            AnimeCount = CountFor(MedyaKategori.Anime),
+            MangaCount = CountFor(MedyaKategori.Manga),
+            KitapCount = CountFor(MedyaKategori.Kitap),
+            DiziCount = CountFor(MedyaKategori.Dizi),
+            FilmCount = CountFor(MedyaKategori.Film),
+            OyunCount = CountFor(MedyaKategori.Oyun)
+        };
+
+        return View(vm);
+    }
+
+    [Authorize]
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> UploadProfileMedia(IFormFile? coverFile, IFormFile? avatarFile, string lang = "tr")
+    {
+        var currentLang = NormalizeLang(lang);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction(nameof(Login), new { lang = currentLang });
+        }
+
+        var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Id == userId.Value);
+        if (user is null)
+        {
+            return RedirectToAction(nameof(Login), new { lang = currentLang });
+        }
+
+        var userDir = Path.Combine(_environment.WebRootPath, "user-media", user.Id.ToString());
+        Directory.CreateDirectory(userDir);
+
+        if (coverFile is not null && coverFile.Length > 0)
+        {
+            var coverPath = await SaveImageAsync(coverFile, userDir, "cover");
+            if (coverPath is not null)
+            {
+                user.CoverImagePath = $"/user-media/{user.Id}/{coverPath}";
+            }
+        }
+
+        if (avatarFile is not null && avatarFile.Length > 0)
+        {
+            var avatarPath = await SaveImageAsync(avatarFile, userDir, "avatar");
+            if (avatarPath is not null)
+            {
+                user.AvatarImagePath = $"/user-media/{user.Id}/{avatarPath}";
+            }
+        }
+
+        await _dbContext.SaveChangesAsync();
+        return RedirectToAction(nameof(Profile), new { lang = currentLang });
     }
 
     private async Task SignInAsync(AppUser user, bool rememberMe)
@@ -240,5 +322,32 @@ public class AccountController : Controller
     private static string NormalizeLang(string? lang)
     {
         return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+    }
+
+    private int? GetCurrentUserId()
+    {
+        var raw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        return int.TryParse(raw, out var id) ? id : null;
+    }
+
+    private static async Task<string?> SaveImageAsync(IFormFile file, string directory, string baseName)
+    {
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new HashSet<string> { ".jpg", ".jpeg", ".png", ".webp" };
+        if (!allowed.Contains(ext))
+        {
+            return null;
+        }
+
+        if (file.Length > 8 * 1024 * 1024)
+        {
+            return null;
+        }
+
+        var fileName = $"{baseName}{ext}";
+        var fullPath = Path.Combine(directory, fileName);
+        await using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await file.CopyToAsync(stream);
+        return fileName;
     }
 }

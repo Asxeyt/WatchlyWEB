@@ -1,14 +1,78 @@
+@model KategoriSecici.ViewModels.ProfileViewModel
 @{
-    var lang = (ViewData["Lang"] as string ?? "tr").ToLowerInvariant();
-    var isEn = lang == "en";
+    var isEn = Model.Lang == "en";
     ViewData["Title"] = isEn ? "Profile" : "Profil";
     string T(string tr, string en) => isEn ? en : tr;
+
+    var coverStyle = string.IsNullOrWhiteSpace(Model.CoverImagePath)
+        ? "background-image: linear-gradient(135deg, #0b1222, #0f172a 55%, #1e293b);"
+        : $"background-image: linear-gradient(rgba(2,6,23,.32), rgba(2,6,23,.75)), url('{Model.CoverImagePath}');";
 }
 
-<div class="card">
-    <div class="card-body">
-        <h1 class="h3 mb-3">@T("Profil", "Profile")</h1>
-        <p class="mb-1"><strong>@T("Ad", "Name"):</strong> @User.Identity?.Name</p>
-        <p class="mb-0"><strong>@T("E-posta", "E-mail"):</strong> @User.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.Email)?.Value</p>
+<section class="profile-shell">
+    <div class="profile-hero" style="@coverStyle">
+        <form asp-controller="Account" asp-action="UploadProfileMedia" method="post" enctype="multipart/form-data" class="profile-upload-form">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="lang" value="@Model.Lang" />
+            <label class="btn btn-sm btn-outline-light">
+                @T("Kapak fotografi sec", "Choose cover")
+                <input type="file" name="coverFile" class="d-none" accept=".jpg,.jpeg,.png,.webp" onchange="this.form.submit()" />
+            </label>
+        </form>
     </div>
-</div>
+
+    <div class="profile-header-card">
+        <div class="profile-avatar-wrap">
+            @if (!string.IsNullOrWhiteSpace(Model.AvatarImagePath))
+            {
+                <img src="@Model.AvatarImagePath" alt="avatar" class="profile-avatar-lg" />
+            }
+            else
+            {
+                <div class="profile-avatar-lg profile-avatar-fallback">
+                    @(Model.DisplayName.Length > 0 ? Model.DisplayName[0].ToString().ToUpper() : "P")
+                </div>
+            }
+            <form asp-controller="Account" asp-action="UploadProfileMedia" method="post" enctype="multipart/form-data" class="profile-avatar-upload">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="lang" value="@Model.Lang" />
+                <label class="btn btn-sm btn-warning">
+                    @T("Profil fotosu sec", "Choose avatar")
+                    <input type="file" name="avatarFile" class="d-none" accept=".jpg,.jpeg,.png,.webp" onchange="this.form.submit()" />
+                </label>
+            </form>
+        </div>
+
+        <div class="profile-title-area">
+            <h1 class="profile-name-lg">@Model.DisplayName</h1>
+            <p class="profile-subtitle">@T("Kisisel profilin", "Your personal profile")</p>
+        </div>
+    </div>
+
+    <div class="profile-stats-grid">
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.AnimeCount</div>
+            <div class="profile-stat-label">Anime</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.MangaCount</div>
+            <div class="profile-stat-label">Manga</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.KitapCount</div>
+            <div class="profile-stat-label">@T("Kitap", "Book")</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.DiziCount</div>
+            <div class="profile-stat-label">@T("Dizi", "Series")</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.FilmCount</div>
+            <div class="profile-stat-label">@T("Film", "Movie")</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.OyunCount</div>
+            <div class="profile-stat-label">@T("Oyun", "Game")</div>
+        </article>
+    </div>
+</section>

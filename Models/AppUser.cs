@@ -22,5 +22,11 @@ public class AppUser
     [StringLength(260)]
     public string? GoogleSubject { get; set; }
 
+    [StringLength(400)]
+    public string? CoverImagePath { get; set; }
+
+    [StringLength(400)]
+    public string? AvatarImagePath { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

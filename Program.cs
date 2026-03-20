@@ -97,10 +97,42 @@ using (var scope = app.Services.CreateScope())
                 PasswordHash TEXT NULL,
                 AuthProvider TEXT NOT NULL DEFAULT 'local',
                 GoogleSubject TEXT NULL,
+                CoverImagePath TEXT NULL,
+                AvatarImagePath TEXT NULL,
                 CreatedAt TEXT NOT NULL
             );
             """);
         db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_AppUsers_Email ON AppUsers (Email);");
+
+        using var userCmd = dbConnection.CreateCommand();
+        userCmd.CommandText = "PRAGMA table_info('AppUsers');";
+        var hasCoverImagePath = false;
+        var hasAvatarImagePath = false;
+        using (var userReader = userCmd.ExecuteReader())
+        {
+            while (userReader.Read())
+            {
+                var col = userReader["name"]?.ToString();
+                if (string.Equals(col, "CoverImagePath", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasCoverImagePath = true;
+                }
+                if (string.Equals(col, "AvatarImagePath", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAvatarImagePath = true;
+                }
+            }
+        }
+
+        if (!hasCoverImagePath)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN CoverImagePath TEXT NULL;");
+        }
+
+        if (!hasAvatarImagePath)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarImagePath TEXT NULL;");
+        }
     }
     SeedData.Initialize(db);
 }
