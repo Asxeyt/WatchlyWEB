@@ -31,7 +31,16 @@ if (!string.IsNullOrWhiteSpace(explicitDbPath))
 else if (!string.IsNullOrWhiteSpace(renderDiskPath))
 {
     Directory.CreateDirectory(renderDiskPath);
-    connectionString = $"Data Source={Path.Combine(renderDiskPath, "kategorisecici.db")}";
+    var diskDbPath = Path.Combine(renderDiskPath, "kategorisecici.db");
+    if (!File.Exists(diskDbPath))
+    {
+        var legacyDbPath = Path.Combine(builder.Environment.ContentRootPath, "kategorisecici.db");
+        if (File.Exists(legacyDbPath))
+        {
+            File.Copy(legacyDbPath, diskDbPath, overwrite: false);
+        }
+    }
+    connectionString = $"Data Source={diskDbPath}";
 }
 else if (!string.IsNullOrWhiteSpace(configuredConnection))
 {

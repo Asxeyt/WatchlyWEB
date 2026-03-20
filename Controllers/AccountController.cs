@@ -59,6 +59,10 @@ public class AccountController : Controller
 
         var email = model.Email.Trim().ToLowerInvariant();
         var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Email == email);
+        if (user is null)
+        {
+            user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Email.ToLower() == email);
+        }
 
         if (user is null)
         {
