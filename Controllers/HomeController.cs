@@ -45,6 +45,15 @@ public class HomeController : Controller
         return View(model);
     }
 
+    [HttpGet]
+    public IActionResult RastgeleKategori(string lang = "tr")
+    {
+        var currentLang = NormalizeLang(lang);
+        var kategoriler = Enum.GetValues<MedyaKategori>();
+        var secim = kategoriler[Random.Shared.Next(kategoriler.Length)];
+        return RedirectToAction(nameof(Index), new { lang = currentLang, kategori = secim });
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Ekle(AnaSayfaViewModel form)
