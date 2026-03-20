@@ -346,6 +346,22 @@ body {
   background: #c46954;
 }
 
+html[data-theme='light'] .profile-header-card,
+html[data-theme='light'] .profile-stat-card,
+html[data-theme='light'] .profile-future-space {
+  background: #111827;
+  border-color: #374151;
+}
+
+html[data-theme='light'] .profile-title-area,
+html[data-theme='light'] .profile-subtitle,
+html[data-theme='light'] .profile-stat-card,
+html[data-theme='light'] .profile-stat-number,
+html[data-theme='light'] .profile-stat-label,
+html[data-theme='light'] .profile-name-lg {
+  color: #ffffff !important;
+}
+
 html[data-theme='dark'] .profile-shell {
   background: #c46954;
   border-color: #7a3c31;
