@@ -263,7 +263,7 @@ body {
 .profile-shell {
   border-radius: 16px;
   overflow: hidden;
-  background: #070b14;
+  background: #c46954;
   border: 1px solid #1f2937;
   min-height: 78vh;
 }
@@ -285,9 +285,9 @@ body {
   display: flex;
   align-items: center;
   gap: 1.2rem;
-  padding: 1.2rem 1.3rem;
-  background: linear-gradient(180deg, #091224, #050a14);
-  border-top: 1px solid rgba(148, 163, 184, 0.28);
+  padding: 1.9rem 1.3rem 1.2rem;
+  background: #c46954;
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
 }
 
 .profile-avatar-wrap {
@@ -296,7 +296,7 @@ body {
   flex-direction: column;
   align-items: center;
   gap: 0.75rem;
-  margin-top: -58px;
+  margin-top: 10px;
 }
 
 .profile-avatar-lg {
@@ -319,7 +319,7 @@ body {
 }
 
 .profile-title-area {
-  color: #dbeafe;
+  color: #000000;
 }
 
 .profile-name-lg {
@@ -330,7 +330,7 @@ body {
 
 .profile-subtitle {
   margin: 0.35rem 0 0;
-  color: #93c5fd;
+  color: #000000;
 }
 
 .profile-stats-grid {
@@ -342,34 +342,34 @@ body {
 
 .profile-future-space {
   min-height: 220px;
-  border-top: 1px solid rgba(148, 163, 184, 0.16);
-  background: linear-gradient(180deg, rgba(7, 12, 22, 0.25), rgba(7, 12, 22, 0.9));
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+  background: #c46954;
 }
 
 html[data-theme='dark'] .profile-shell {
-  background: #07141a;
-  border-color: #173042;
+  background: #c46954;
+  border-color: #7a3c31;
 }
 
 html[data-theme='dark'] .profile-header-card {
-  background: linear-gradient(180deg, #0b2732, #0a1b26 60%, #08131f);
-  border-top-color: rgba(56, 189, 248, 0.22);
+  background: #c46954;
+  border-top-color: rgba(0, 0, 0, 0.2);
 }
 
 html[data-theme='dark'] .profile-stat-card {
-  background: #0d202a;
-  border-color: #204252;
+  background: #c46954;
+  border-color: #8a4839;
 }
 
 html[data-theme='dark'] .profile-future-space {
-  background: linear-gradient(180deg, rgba(6, 26, 33, 0.28), rgba(6, 26, 33, 0.92));
+  background: #c46954;
 }
 
 .profile-stat-card {
   border: 1px solid #1f2937;
   border-radius: 12px;
-  background: #0b1220;
-  color: #e5e7eb;
+  background: #c46954;
+  color: #000000;
   padding: 1rem;
 }
 
@@ -381,6 +381,7 @@ html[data-theme='dark'] .profile-future-space {
 .profile-stat-label {
   opacity: 0.85;
   margin-top: 0.2rem;
+  color: #000000;
 }
 
 @media (max-width: 900px) {

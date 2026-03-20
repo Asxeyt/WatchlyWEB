@@ -135,7 +135,8 @@
                         @Html.AntiForgeryToken()
                         <div class="modal-body">
                             <input type="hidden" name="Lang" value="@lang" />
-                            <p class="mb-2">@T("Hesabi silmek icin parolani yaz.", "Enter your password to delete account.")</p>
+                            <p class="mb-2 fw-semibold">@T("Hesabi silmek istedigine emin misin?", "Are you sure you want to delete your account?")</p>
+                            <p class="mb-2 text-danger">@T("Bu islem geri alinmaz. Silersen e-posta, kullanici adi, sifre ve tum liste verilerin kalici olarak silinir.", "This cannot be undone. If you delete it, your e-mail, username, password, and all list data will be permanently removed.")</p>
                             <input type="password" name="Password" class="form-control" required />
                         </div>
                         <div class="modal-footer">
