@@ -96,7 +96,7 @@
                                                 @Html.AntiForgeryToken()
                                                 <button type="submit" class="btn btn-outline-danger btn-sm w-100">@T("Oturumu kapat", "Sign out")</button>
                                             </form>
-                                            <button type="button" class="btn btn-dark btn-sm w-100" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">@T("Hesabi sil", "Delete account")</button>
+                                            <button type="button" class="btn btn-dark btn-sm w-100" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">@T("Hesabı sil", "Delete account")</button>
                                         </div>
                                     }
                                 </div>
@@ -128,7 +128,7 @@
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <h5 class="modal-title">@T("Hesabi sil", "Delete account")</h5>
+                        <h5 class="modal-title">@T("Hesabı sil", "Delete account")</h5>
                         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                     </div>
                     <form asp-controller="Account" asp-action="DeleteAccount" method="post">

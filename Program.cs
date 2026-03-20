@@ -141,6 +141,7 @@ using (var scope = app.Services.CreateScope())
                 PasswordHash TEXT NULL,
                 EmailVerified INTEGER NOT NULL DEFAULT 0,
                 EmailVerificationToken TEXT NULL,
+                EmailVerificationExpiresAt TEXT NULL,
                 AuthProvider TEXT NOT NULL DEFAULT 'local',
                 GoogleSubject TEXT NULL,
                 CoverImagePath TEXT NULL,
@@ -155,6 +156,7 @@ using (var scope = app.Services.CreateScope())
         var hasUserName = false;
         var hasEmailVerified = false;
         var hasEmailVerificationToken = false;
+        var hasEmailVerificationExpiresAt = false;
         var hasCoverImagePath = false;
         var hasAvatarImagePath = false;
         using (var userReader = userCmd.ExecuteReader())
@@ -173,6 +175,10 @@ using (var scope = app.Services.CreateScope())
                 if (string.Equals(col, "EmailVerificationToken", StringComparison.OrdinalIgnoreCase))
                 {
                     hasEmailVerificationToken = true;
+                }
+                if (string.Equals(col, "EmailVerificationExpiresAt", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasEmailVerificationExpiresAt = true;
                 }
                 if (string.Equals(col, "CoverImagePath", StringComparison.OrdinalIgnoreCase))
                 {
@@ -196,6 +202,10 @@ using (var scope = app.Services.CreateScope())
         if (!hasEmailVerificationToken)
         {
             db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN EmailVerificationToken TEXT NULL;");
+        }
+        if (!hasEmailVerificationExpiresAt)
+        {
+            db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN EmailVerificationExpiresAt TEXT NULL;");
         }
 
         if (!hasCoverImagePath)

@@ -3,7 +3,8 @@
     var isEn = lang == "en";
     var email = (ViewData["VerifyEmail"] as string) ?? "";
     var sent = (ViewData["VerifySent"] as bool?) == true;
-    var fallbackLink = (ViewData["FallbackLink"] as string) ?? "";
+    var fallbackCode = (ViewData["FallbackCode"] as string) ?? "";
+    var verifyError = (ViewData["VerifyError"] as string) ?? "";
     ViewData["Title"] = isEn ? "Verify E-mail" : "E-posta Dogrulama";
     string T(string tr, string en) => isEn ? en : tr;
 }
@@ -16,23 +17,37 @@
                 <p class="mb-3">@T("Kayit tamamlandi. Dogrulama adimi gerekli.", "Registration completed. Verification is required.")</p>
                 <p class="mb-3"><strong>@email</strong></p>
 
+                @if (!string.IsNullOrWhiteSpace(verifyError))
+                {
+                    <div class="alert alert-danger py-2">@verifyError</div>
+                }
+
                 @if (sent)
                 {
-                    <div class="alert alert-success py-2">@T("Dogrulama maili gonderildi.", "Verification email has been sent.")</div>
+                    <div class="alert alert-success py-2">@T("Dogrulama kodu e-postana gonderildi.", "Verification code has been sent to your e-mail.")</div>
                 }
                 else
                 {
                     <div class="alert alert-warning py-2">
-                        @T("Mail servisi ayarli degil. Gecici olarak bu linkten dogrulayabilirsin.", "Mail service is not configured. Use this temporary verification link.")
+                        @T("Mail servisi ayarli degil. Gecici kod asagida.", "Mail service is not configured. Temporary code is shown below.")
                     </div>
-                    @if (!string.IsNullOrWhiteSpace(fallbackLink))
+                    @if (!string.IsNullOrWhiteSpace(fallbackCode))
                     {
-                        <a class="btn btn-warning" href="@fallbackLink">@T("E-postayi dogrula", "Verify e-mail")</a>
+                        <div class="alert alert-dark py-2 mb-3"><strong>@T("Kod", "Code"):</strong> @fallbackCode</div>
                     }
                 }
 
+                <form asp-controller="Account" asp-action="VerifyCode" method="post" class="mt-2">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="lang" value="@lang" />
+                    <input type="hidden" name="email" value="@email" />
+                    <label class="form-label auth-label">@T("Dogrulama kodu", "Verification code")</label>
+                    <input name="code" class="form-control auth-input" maxlength="6" required />
+                    <button type="submit" class="btn auth-primary-btn w-100 mt-3">@T("Kodu dogrula", "Verify code")</button>
+                </form>
+
                 <div class="mt-3">
-                    <a class="btn btn-outline-light" asp-controller="Account" asp-action="Login" asp-route-lang="@lang">@T("Giris sayfasina don", "Back to login")</a>
+                    <a class="btn btn-dark" asp-controller="Account" asp-action="Login" asp-route-lang="@lang">@T("Giris sayfasina don", "Back to login")</a>
                 </div>
             </div>
         </div>

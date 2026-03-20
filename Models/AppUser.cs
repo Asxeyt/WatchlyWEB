@@ -25,6 +25,8 @@ public class AppUser
     [StringLength(120)]
     public string? EmailVerificationToken { get; set; }
 
+    public DateTime? EmailVerificationExpiresAt { get; set; }
+
     [StringLength(30)]
     public string AuthProvider { get; set; } = "local";
 

@@ -89,10 +89,18 @@ public class AccountController : Controller
 
         if (!user.EmailVerified)
         {
-            model.ErrorMessage = model.Lang == "en"
-                ? "Please verify your e-mail before signing in."
-                : "Giris yapmadan once e-posta dogrulamasi yapmalisin.";
-            return View(model);
+            user.EmailVerificationToken = GenerateVerificationCode();
+            user.EmailVerificationExpiresAt = DateTime.UtcNow.AddMinutes(10);
+            await _dbContext.SaveChangesAsync();
+
+            var sentVerification = await TrySendVerificationEmailAsync(user.Email, user.EmailVerificationToken, model.Lang);
+            return RedirectToAction(nameof(VerifyNotice), new
+            {
+                lang = model.Lang,
+                email = user.Email,
+                sent = sentVerification,
+                fallbackCode = sentVerification ? null : user.EmailVerificationToken
+            });
         }
 
         await SignInAsync(user, model.RememberMe);
@@ -155,7 +163,8 @@ public class AccountController : Controller
             Email = email,
             DisplayName = requestedUserName,
             EmailVerified = false,
-            EmailVerificationToken = Guid.NewGuid().ToString("N"),
+            EmailVerificationToken = GenerateVerificationCode(),
+            EmailVerificationExpiresAt = DateTime.UtcNow.AddMinutes(10),
             AuthProvider = "local"
         };
         user.PasswordHash = _passwordHasher.HashPassword(user, model.Password);
@@ -163,16 +172,13 @@ public class AccountController : Controller
         _dbContext.AppUsers.Add(user);
         await _dbContext.SaveChangesAsync();
 
-        var verifyUrl = Url.Action(nameof(VerifyEmail), "Account",
-            new { lang = model.Lang, email = user.Email, token = user.EmailVerificationToken }, Request.Scheme);
-
-        var sent = await TrySendVerificationEmailAsync(user.Email, verifyUrl ?? string.Empty, model.Lang);
+        var sent = await TrySendVerificationEmailAsync(user.Email, user.EmailVerificationToken, model.Lang);
         return RedirectToAction(nameof(VerifyNotice), new
         {
             lang = model.Lang,
             email = user.Email,
             sent,
-            fallbackLink = sent ? null : verifyUrl
+            fallbackCode = sent ? null : user.EmailVerificationToken
         });
     }
 
@@ -224,7 +230,8 @@ public class AccountController : Controller
                 DisplayName = string.IsNullOrWhiteSpace(displayName) ? email.Split('@')[0] : displayName,
                 EmailVerified = true,
                 AuthProvider = "google",
-                GoogleSubject = sub
+                GoogleSubject = sub,
+                EmailVerificationExpiresAt = null
             };
             _dbContext.AppUsers.Add(user);
         }
@@ -234,6 +241,7 @@ public class AccountController : Controller
             user.GoogleSubject = sub;
             user.EmailVerified = true;
             user.EmailVerificationToken = null;
+            user.EmailVerificationExpiresAt = null;
             if (string.IsNullOrWhiteSpace(user.UserName))
             {
                 user.UserName = await GenerateUniqueUserNameAsync(email.Split('@')[0]);
@@ -258,43 +266,60 @@ public class AccountController : Controller
     }
 
     [HttpGet]
-    public IActionResult VerifyNotice(string lang = "tr", string? email = null, bool sent = false, string? fallbackLink = null)
+    public IActionResult VerifyNotice(string lang = "tr", string? email = null, bool sent = false, string? fallbackCode = null, string? errorMessage = null)
     {
         ViewData["Lang"] = NormalizeLang(lang);
         ViewData["BodyClass"] = "auth-page";
         ViewData["HideTopNav"] = true;
         ViewData["VerifyEmail"] = email ?? string.Empty;
         ViewData["VerifySent"] = sent;
-        ViewData["FallbackLink"] = fallbackLink ?? string.Empty;
+        ViewData["FallbackCode"] = fallbackCode ?? string.Empty;
+        ViewData["VerifyError"] = errorMessage ?? string.Empty;
         return View();
     }
 
-    [HttpGet]
-    public async Task<IActionResult> VerifyEmail(string lang = "tr", string email = "", string token = "")
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> VerifyCode(string lang = "tr", string email = "", string code = "")
     {
         var currentLang = NormalizeLang(lang);
         var normalizedEmail = email.Trim().ToLowerInvariant();
         var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Email.ToLower() == normalizedEmail);
-        if (user is null || string.IsNullOrWhiteSpace(user.EmailVerificationToken) || user.EmailVerificationToken != token)
+        if (user is null || string.IsNullOrWhiteSpace(user.EmailVerificationToken))
         {
-            return RedirectToAction(nameof(Login), new
+            return RedirectToAction(nameof(VerifyNotice), new
             {
                 lang = currentLang,
-                errorMessage = currentLang == "en" ? "Verification link is invalid." : "Dogrulama baglantisi gecersiz."
+                email = normalizedEmail,
+                sent = false,
+                fallbackCode = "",
+                errorMessage = currentLang == "en" ? "Code is invalid. Try again." : "Kod geçersiz. Tekrar dene."
+            });
+        }
+
+        var normalizedCode = (code ?? string.Empty).Trim();
+        var isExpired = user.EmailVerificationExpiresAt is null || user.EmailVerificationExpiresAt < DateTime.UtcNow;
+        if (isExpired || !string.Equals(user.EmailVerificationToken, normalizedCode, StringComparison.Ordinal))
+        {
+            return RedirectToAction(nameof(VerifyNotice), new
+            {
+                lang = currentLang,
+                email = normalizedEmail,
+                sent = false,
+                fallbackCode = "",
+                errorMessage = currentLang == "en"
+                    ? "Code is wrong. Please try again."
+                    : "Kod yanlış. Lütfen tekrar dene."
             });
         }
 
         user.EmailVerified = true;
         user.EmailVerificationToken = null;
+        user.EmailVerificationExpiresAt = null;
         await _dbContext.SaveChangesAsync();
 
-        return RedirectToAction(nameof(Login), new
-        {
-            lang = currentLang,
-            errorMessage = currentLang == "en"
-                ? "E-mail verified. You can sign in now."
-                : "E-posta dogrulandi. Simdi giris yapabilirsin."
-        });
+        await SignInAsync(user, true);
+        return RedirectToAction("Index", "Home", new { lang = currentLang, kategori = MedyaKategori.Film });
     }
 
     [Authorize]
@@ -544,7 +569,7 @@ public class AccountController : Controller
         return candidate;
     }
 
-    private async Task<bool> TrySendVerificationEmailAsync(string toEmail, string verifyUrl, string lang)
+    private async Task<bool> TrySendVerificationEmailAsync(string toEmail, string verificationCode, string lang)
     {
         try
         {
@@ -576,8 +601,8 @@ public class AccountController : Controller
 
             var subject = lang == "en" ? "Verify your KategoriSecici e-mail" : "KategoriSecici e-posta dogrulama";
             var body = lang == "en"
-                ? $"Click this link to verify your e-mail:\n{verifyUrl}"
-                : $"E-postani dogrulamak icin bu baglantiya tikla:\n{verifyUrl}";
+                ? $"Your KategoriSecici verification code: {verificationCode}\nThis code expires in 10 minutes."
+                : $"KategoriSecici dogrulama kodun: {verificationCode}\nBu kod 10 dakika icinde gecerlidir.";
 
             using var message = new MailMessage(smtpFrom, toEmail, subject, body);
             await smtp.SendMailAsync(message);
@@ -587,5 +612,10 @@ public class AccountController : Controller
         {
             return false;
         }
+    }
+
+    private static string GenerateVerificationCode()
+    {
+        return Random.Shared.Next(100000, 999999).ToString();
     }
 }
