@@ -59,9 +59,17 @@ public class AccountController : Controller
         var email = model.Email.Trim().ToLowerInvariant();
         var user = await _dbContext.AppUsers.FirstOrDefaultAsync(x => x.Email == email);
 
-        if (user is null || string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user is null)
         {
-            model.ErrorMessage = model.Lang == "en" ? "Invalid email or password." : "E-posta veya parola hatali.";
+            model.ErrorMessage = model.Lang == "en" ? "Account not found. Please sign up first." : "Hesap bulunamadi. Once kaydolmalisin.";
+            return View(model);
+        }
+
+        if (string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            model.ErrorMessage = model.Lang == "en"
+                ? "This account uses Google sign-in. Please continue with Google."
+                : "Bu hesap Google ile acilmis. Lutfen Google ile giris yap.";
             return View(model);
         }
 

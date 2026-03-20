@@ -14,9 +14,37 @@ if (!string.IsNullOrWhiteSpace(renderPort))
     builder.WebHost.UseUrls($"http://*:{renderPort}");
 }
 
+var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
+var explicitDbPath = Environment.GetEnvironmentVariable("DATABASE_PATH");
+var renderDiskPath = Environment.GetEnvironmentVariable("RENDER_DISK_PATH");
+
+string connectionString;
+if (!string.IsNullOrWhiteSpace(explicitDbPath))
+{
+    var dir = Path.GetDirectoryName(explicitDbPath);
+    if (!string.IsNullOrWhiteSpace(dir))
+    {
+        Directory.CreateDirectory(dir);
+    }
+    connectionString = $"Data Source={explicitDbPath}";
+}
+else if (!string.IsNullOrWhiteSpace(renderDiskPath))
+{
+    Directory.CreateDirectory(renderDiskPath);
+    connectionString = $"Data Source={Path.Combine(renderDiskPath, "kategorisecici.db")}";
+}
+else if (!string.IsNullOrWhiteSpace(configuredConnection))
+{
+    connectionString = configuredConnection;
+}
+else
+{
+    connectionString = $"Data Source={Path.Combine(builder.Environment.ContentRootPath, "kategorisecici.db")}";
+}
+
 builder.Services.AddControllersWithViews();
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(connectionString));
 builder.Services.AddScoped<PasswordHasher<KategoriSecici.Models.AppUser>>();
 
 builder.Services.AddAuthentication(options =>
@@ -29,6 +57,8 @@ builder.Services.AddAuthentication(options =>
     {
         options.LoginPath = "/Account/Login";
         options.AccessDeniedPath = "/Account/Login";
+        options.ExpireTimeSpan = TimeSpan.FromDays(30);
+        options.SlidingExpiration = true;
     });
 
 var googleClientId = builder.Configuration["Authentication:Google:ClientId"] ?? Environment.GetEnvironmentVariable("GOOGLE_CLIENT_ID");
