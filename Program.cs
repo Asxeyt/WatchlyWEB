@@ -354,7 +354,8 @@ static string NormalizePostgresConnectionString(string raw)
             }
         }
 
-        return $"Host={uri.Host};Port={uri.Port};Database={db};Username={user};Password={pass};SSL Mode={sslMode};Trust Server Certificate=true";
+        var port = uri.Port > 0 ? uri.Port : 5432;
+        return $"Host={uri.Host};Port={port};Database={db};Username={user};Password={pass};SSL Mode={sslMode};Trust Server Certificate=true";
     }
 
     return raw;
