@@ -46,6 +46,17 @@
         MedyaKategori.Oyun => T("Oynadiklarim", "Played Items"),
         _ => T("Izlediklerim", "Watched")
     };
+
+    string OrnekMetin(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Anime => "One Piece",
+        MedyaKategori.Manga => "Berserk",
+        MedyaKategori.Kitap => "1984",
+        MedyaKategori.Dizi => "Breaking Bad",
+        MedyaKategori.Film => "Interstellar",
+        MedyaKategori.Oyun => "Elden Ring",
+        _ => "Interstellar"
+    };
 }
 
 <div class="dashboard-page">
@@ -101,7 +112,7 @@
                                            id="catalogSearchInput"
                                            name="YeniOgeAdi"
                                            autocomplete="off"
-                                           placeholder="@T("Orn: Interstellar", "Ex: Interstellar")" />
+                                           placeholder="@T($"Orn: {OrnekMetin(Model.SeciliKategori)}", $"Ex: {OrnekMetin(Model.SeciliKategori)}")" />
                                     <div id="catalogSearchResults" class="catalog-search-results d-none"></div>
                                 </div>
                                 <div class="add-button-wrap">
