@@ -17,7 +17,7 @@ if (!string.IsNullOrWhiteSpace(renderPort))
 var configuredConnection = builder.Configuration.GetConnectionString("DefaultConnection");
 var explicitDbPath = Environment.GetEnvironmentVariable("DATABASE_PATH");
 var renderDiskPath = Environment.GetEnvironmentVariable("RENDER_DISK_PATH");
-if (string.IsNullOrWhiteSpace(renderDiskPath) && !string.IsNullOrWhiteSpace(renderPort) && Directory.Exists("/var/data"))
+if (string.IsNullOrWhiteSpace(renderDiskPath) && !string.IsNullOrWhiteSpace(renderPort))
 {
     renderDiskPath = "/var/data";
 }
