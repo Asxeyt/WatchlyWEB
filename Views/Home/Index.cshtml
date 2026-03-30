@@ -57,6 +57,13 @@
         MedyaKategori.Oyun => "Elden Ring",
         _ => "Interstellar"
     };
+
+    string BilgiYok() => T("Bilgi yok", "No data");
+    string OzetYok() => T("Konu yok", "No summary");
+    string TurEtiketi() => T("Tur", "Genre");
+    string KonuEtiketi() => T("Konu", "Summary");
+    string PuanEtiketi() => T("Puan", "Score");
+    string FiyatEtiketi() => T("Fiyat", "Price");
 }
 
 <div class="dashboard-page">
@@ -95,8 +102,41 @@
 
                 @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenOge))
                 {
-                    <div class="alert alert-success" role="alert">
-                        <strong>@T("Rastgele Secim:", "Random Pick:")</strong> @Model.RastgeleSecilenOge
+                    <div class="card mb-3 category-list-card random-result-card">
+                        <div class="card-body">
+                            <h2 class="h5 mb-3">@T("Rastgele Secim", "Random Pick")</h2>
+                            @if (Model.RastgeleSecilenDetay is not null)
+                            {
+                                <article class="media-item-card">
+                                    <div class="media-item-poster-wrap">
+                                        @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.PosterUrl))
+                                        {
+                                            <img src="@Model.RastgeleSecilenDetay.PosterUrl" alt="@Model.RastgeleSecilenDetay.Ad" class="media-item-poster" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                        }
+                                    </div>
+                                    <div class="media-item-content">
+                                        <h3 class="media-item-title">@Model.RastgeleSecilenDetay.Ad</h3>
+                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Tur) ? BilgiYok() : Model.RastgeleSecilenDetay.Tur)</p>
+                                        <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : Model.RastgeleSecilenDetay.Konu)</p>
+                                        <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Puan) ? BilgiYok() : Model.RastgeleSecilenDetay.Puan)</p>
+                                        @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Fiyat))
+                                        {
+                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @Model.RastgeleSecilenDetay.Fiyat</p>
+                                        }
+                                    </div>
+                                </article>
+                            }
+                            else
+                            {
+                                <div class="alert alert-success mb-0" role="alert">
+                                    <strong>@T("Rastgele Secim:", "Random Pick:")</strong> @Model.RastgeleSecilenOge
+                                </div>
+                            }
+                        </div>
                     </div>
                 }
 
@@ -107,6 +147,11 @@
                             <form asp-action="Ekle" method="post" class="add-item-form">
                                 <input type="hidden" name="Dil" value="@Model.Dil" />
                                 <input type="hidden" name="SeciliKategori" value="@Model.SeciliKategori" />
+                                <input type="hidden" id="selectedPosterUrl" name="YeniOgePosterUrl" />
+                                <input type="hidden" id="selectedGenre" name="YeniOgeTur" />
+                                <input type="hidden" id="selectedSummary" name="YeniOgeKonu" />
+                                <input type="hidden" id="selectedScore" name="YeniOgePuan" />
+                                <input type="hidden" id="selectedPrice" name="YeniOgeFiyat" />
                                 <div class="add-input-wrap">
                                     <input class="form-control"
                                            id="catalogSearchInput"
@@ -139,12 +184,31 @@
                         }
                         else
                         {
-                            <ul class="list-group list-group-flush">
+                            <div class="media-item-list">
                                 @foreach (var item in Model.SeciliKategoriListeOgeleri)
                                 {
-                                    <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
-                                        <span>@item.Ad</span>
-                                        <div class="d-flex align-items-center gap-2">
+                                    <article class="media-item-card">
+                                        <div class="media-item-poster-wrap">
+                                            @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
+                                            {
+                                                <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                            }
+                                        </div>
+                                        <div class="media-item-content">
+                                            <h3 class="media-item-title">@item.Ad</h3>
+                                            <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : item.Tur)</p>
+                                            <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
+                                            <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
+                                            @if (!string.IsNullOrWhiteSpace(item.Fiyat))
+                                            {
+                                                <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @item.Fiyat</p>
+                                            }
+                                        </div>
+                                        <div class="media-item-actions">
                                             <form asp-action="IzledimYap" method="post" class="m-0">
                                                 <input type="hidden" name="id" value="@item.Id" />
                                                 <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
@@ -158,9 +222,9 @@
                                                 <button type="submit" class="btn btn-sm btn-outline-danger">@T("Cikar", "Remove")</button>
                                             </form>
                                         </div>
-                                    </li>
+                                    </article>
                                 }
-                            </ul>
+                            </div>
                         }
                     </div>
                 </div>
@@ -175,20 +239,41 @@
                     }
                     else
                     {
-                        <ul class="list-group list-group-flush">
+                        <div class="media-item-list">
                             @foreach (var item in Model.SeciliKategoriIzlenenOgeleri)
                             {
-                                <li class="list-group-item px-0 d-flex justify-content-between align-items-center gap-2">
-                                    <span>@item.Ad</span>
-                                    <form asp-action="ListeyeGeriAl" method="post" class="m-0">
-                                        <input type="hidden" name="id" value="@item.Id" />
-                                        <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
-                                        <input type="hidden" name="dil" value="@Model.Dil" />
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary">@T("Listeye Al", "Move to List")</button>
-                                    </form>
-                                </li>
+                                <article class="media-item-card">
+                                    <div class="media-item-poster-wrap">
+                                        @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
+                                        {
+                                            <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
+                                        }
+                                        else
+                                        {
+                                            <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                        }
+                                    </div>
+                                    <div class="media-item-content">
+                                        <h3 class="media-item-title">@item.Ad</h3>
+                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : item.Tur)</p>
+                                        <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
+                                        <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
+                                        @if (!string.IsNullOrWhiteSpace(item.Fiyat))
+                                        {
+                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @item.Fiyat</p>
+                                        }
+                                    </div>
+                                    <div class="media-item-actions">
+                                        <form asp-action="ListeyeGeriAl" method="post" class="m-0">
+                                            <input type="hidden" name="id" value="@item.Id" />
+                                            <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
+                                            <input type="hidden" name="dil" value="@Model.Dil" />
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary">@T("Listeye Al", "Move to List")</button>
+                                        </form>
+                                    </div>
+                                </article>
                             }
-                        </ul>
+                        </div>
                     }
                 </div>
             </aside>
@@ -202,6 +287,11 @@
 (() => {
   const input = document.getElementById('catalogSearchInput');
   const resultsBox = document.getElementById('catalogSearchResults');
+  const selectedPoster = document.getElementById('selectedPosterUrl');
+  const selectedGenre = document.getElementById('selectedGenre');
+  const selectedSummary = document.getElementById('selectedSummary');
+  const selectedScore = document.getElementById('selectedScore');
+  const selectedPrice = document.getElementById('selectedPrice');
   if (!input || !resultsBox) return;
 
   const lang = '@Model.Dil';
@@ -216,6 +306,14 @@
   function hideResults() {
     resultsBox.innerHTML = '';
     resultsBox.classList.add('d-none');
+  }
+
+  function clearSelectedMeta() {
+    if (selectedPoster) selectedPoster.value = '';
+    if (selectedGenre) selectedGenre.value = '';
+    if (selectedSummary) selectedSummary.value = '';
+    if (selectedScore) selectedScore.value = '';
+    if (selectedPrice) selectedPrice.value = '';
   }
 
   function renderItems(data) {
@@ -236,14 +334,25 @@
       const name = esc(item.name || '');
       const altName = esc(item.altName || '');
       const score = esc(item.score || '');
+      const summary = esc(item.summary || '');
+      const genre = esc(item.genre || item.altName || '');
+      const price = esc(item.price || '');
       const poster = esc(item.posterUrl || '');
       return `
-        <button type="button" class="catalog-result-item" data-name="${name}">
+        <button type="button" class="catalog-result-item"
+          data-name="${name}"
+          data-poster="${poster}"
+          data-genre="${genre}"
+          data-summary="${summary}"
+          data-score="${score}"
+          data-price="${price}">
           ${poster ? `<img src="${poster}" alt="" class="catalog-thumb" loading="lazy" />` : `<span class="catalog-thumb catalog-thumb-empty"></span>`}
           <span class="catalog-meta">
             <span class="catalog-title">${name}</span>
-            ${altName ? `<span class="catalog-sub">${altName}</span>` : ''}
+            ${genre ? `<span class="catalog-sub">${genre}</span>` : ''}
+            ${summary ? `<span class="catalog-sub">${summary}</span>` : ''}
             ${score ? `<span class="catalog-sub">Score: ${score}</span>` : ''}
+            ${price ? `<span class="catalog-sub">Price: ${price}</span>` : ''}
           </span>
         </button>
       `;
@@ -255,6 +364,11 @@
     resultsBox.querySelectorAll('.catalog-result-item').forEach(btn => {
       btn.addEventListener('click', () => {
         input.value = btn.getAttribute('data-name') || '';
+        if (selectedPoster) selectedPoster.value = btn.getAttribute('data-poster') || '';
+        if (selectedGenre) selectedGenre.value = btn.getAttribute('data-genre') || '';
+        if (selectedSummary) selectedSummary.value = btn.getAttribute('data-summary') || '';
+        if (selectedScore) selectedScore.value = btn.getAttribute('data-score') || '';
+        if (selectedPrice) selectedPrice.value = btn.getAttribute('data-price') || '';
         hideResults();
         input.focus();
       });
@@ -262,6 +376,7 @@
   }
 
   input.addEventListener('input', () => {
+    clearSelectedMeta();
     const q = input.value.trim();
     if (q.length < 2) {
       hideResults();

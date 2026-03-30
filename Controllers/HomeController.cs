@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using KategoriSecici.Data;
 using KategoriSecici.Models;
 using KategoriSecici.ViewModels;
@@ -93,6 +94,11 @@ public class HomeController : Controller
         {
             Ad = form.YeniOgeAdi.Trim(),
             Kategori = seciliKategori,
+            PosterUrl = CleanValue(form.YeniOgePosterUrl, 600),
+            Tur = CleanValue(form.YeniOgeTur, 240),
+            Konu = CleanValue(form.YeniOgeKonu, 3000),
+            Puan = CleanValue(form.YeniOgePuan, 80),
+            Fiyat = CleanValue(form.YeniOgeFiyat, 80),
             AppUserId = userId.Value,
             Izlendi = false
         };
@@ -198,7 +204,6 @@ public class HomeController : Controller
 
         var kayitlar = await _dbContext.MedyaOgeleri
             .Where(x => x.Kategori == kategori && !x.Izlendi && x.AppUserId == userId.Value)
-            .Select(x => x.Ad)
             .ToListAsync();
 
         if (kayitlar.Count == 0)
@@ -208,7 +213,9 @@ public class HomeController : Controller
             return RedirectToAction(nameof(Index), new { lang, kategori });
         }
 
-        TempData["RastgeleSonuc"] = kayitlar[Random.Shared.Next(kayitlar.Count)];
+        var secilen = kayitlar[Random.Shared.Next(kayitlar.Count)];
+        TempData["RastgeleSonuc"] = secilen.Ad;
+        TempData["RastgeleSonucId"] = secilen.Id;
         return RedirectToAction(nameof(Index), new { lang, kategori });
     }
 
@@ -333,6 +340,7 @@ public class HomeController : Controller
             SeciliKategoriListeOgeleri = seciliListe.Where(x => !x.Izlendi).ToList(),
             SeciliKategoriIzlenenOgeleri = seciliListe.Where(x => x.Izlendi).ToList(),
             RastgeleSecilenOge = TempData["RastgeleSonuc"] as string,
+            RastgeleSecilenDetay = FindRandomDetailFromTempData(seciliListe),
             KategoriAdetleri = kategoriAdetleri
         };
     }
@@ -340,6 +348,28 @@ public class HomeController : Controller
     private static string NormalizeLang(string? lang)
     {
         return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+    }
+
+    private static string? CleanValue(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
+    }
+
+    private MedyaOgesi? FindRandomDetailFromTempData(List<MedyaOgesi> seciliListe)
+    {
+        var idRaw = TempData["RastgeleSonucId"]?.ToString();
+        if (!int.TryParse(idRaw, out var randomId))
+        {
+            return null;
+        }
+
+        return seciliListe.FirstOrDefault(x => x.Id == randomId);
     }
 
     private int? GetCurrentUserId()
@@ -409,6 +439,15 @@ public class HomeController : Controller
                 var score = item.TryGetProperty("score", out var sc) && sc.ValueKind == JsonValueKind.Number
                     ? sc.GetDouble().ToString("0.0")
                     : string.Empty;
+                var genres = string.Empty;
+                if (item.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array)
+                {
+                    genres = string.Join(", ",
+                        gs.EnumerateArray()
+                            .Take(3)
+                            .Select(x => x.TryGetProperty("name", out var gn) ? gn.GetString() : null)
+                            .Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
 
                 string poster = string.Empty;
                 if (item.TryGetProperty("images", out var images) &&
@@ -427,9 +466,11 @@ public class HomeController : Controller
                 {
                     Name = title,
                     AltName = englishTitle,
+                    Genre = genres,
                     PosterUrl = poster,
-                    Overview = synopsis,
-                    Score = score
+                    Summary = synopsis,
+                    Score = score,
+                    Price = string.Empty
                 });
             }
 
@@ -484,13 +525,21 @@ public class HomeController : Controller
     {
         var rows = await _dbContext.MedyaOgeleri
             .Where(x => x.AppUserId == userId && x.Kategori == kategori)
-            .Select(x => x.Ad)
+            .Select(x => new CatalogSuggestionViewModel
+            {
+                Name = x.Ad,
+                PosterUrl = x.PosterUrl ?? string.Empty,
+                Genre = x.Tur ?? string.Empty,
+                Summary = x.Konu ?? string.Empty,
+                Score = x.Puan ?? string.Empty,
+                Price = x.Fiyat ?? string.Empty
+            })
             .ToListAsync();
 
         var local = rows
-            .Where(x => !string.IsNullOrWhiteSpace(x))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .Select(x => new CatalogSuggestionViewModel { Name = x })
+            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
+            .GroupBy(x => x.Name, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
             .ToList();
 
         return RankFuzzy(query, local);
@@ -543,9 +592,11 @@ public class HomeController : Controller
                 {
                     Name = title,
                     AltName = author,
+                    Genre = author,
                     PosterUrl = cover,
-                    Overview = year,
-                    Score = year
+                    Summary = year,
+                    Score = string.Empty,
+                    Price = string.Empty
                 });
             }
 
@@ -590,6 +641,8 @@ public class HomeController : Controller
                 {
                     genres = string.Join(", ", gs.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
                 }
+                var summary = show.TryGetProperty("summary", out var sm) ? (sm.GetString() ?? string.Empty) : string.Empty;
+                summary = StripHtml(summary);
 
                 var rating = string.Empty;
                 if (show.TryGetProperty("rating", out var ratingObj) &&
@@ -610,9 +663,11 @@ public class HomeController : Controller
                 {
                     Name = title,
                     AltName = genres,
+                    Genre = genres,
                     PosterUrl = poster,
-                    Overview = string.Empty,
-                    Score = rating
+                    Summary = summary,
+                    Score = rating,
+                    Price = string.Empty
                 });
             }
 
@@ -663,14 +718,22 @@ public class HomeController : Controller
                 var year = item.TryGetProperty("year", out var y) && y.ValueKind == JsonValueKind.Number ? y.GetInt32().ToString() : string.Empty;
                 var score = item.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble().ToString("0.0") : string.Empty;
                 var poster = item.TryGetProperty("medium_cover_image", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+                var summary = item.TryGetProperty("summary", out var sm) ? (sm.GetString() ?? string.Empty) : string.Empty;
+                var genres = string.Empty;
+                if (item.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array)
+                {
+                    genres = string.Join(", ", gs.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
 
                 list.Add(new CatalogSuggestionViewModel
                 {
                     Name = title,
                     AltName = year,
+                    Genre = genres,
                     PosterUrl = poster,
-                    Overview = string.Empty,
-                    Score = score
+                    Summary = summary,
+                    Score = score,
+                    Price = string.Empty
                 });
             }
 
@@ -718,9 +781,11 @@ public class HomeController : Controller
                 {
                     Name = title,
                     AltName = year,
+                    Genre = string.Empty,
                     PosterUrl = poster == "N/A" ? string.Empty : poster,
-                    Overview = string.Empty,
-                    Score = string.Empty
+                    Summary = string.Empty,
+                    Score = string.Empty,
+                    Price = string.Empty
                 });
             }
 
@@ -769,15 +834,27 @@ public class HomeController : Controller
                 {
                     price = $"${finalPrice.GetInt32() / 100.0:0.00}";
                 }
+                var score = string.Empty;
+                if (item.TryGetProperty("review_score", out var rv) && rv.ValueKind == JsonValueKind.Number)
+                {
+                    score = rv.GetInt32().ToString();
+                }
+                var genres = string.Empty;
+                if (item.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
+                {
+                    genres = string.Join(", ", tags.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
 
                 var poster = item.TryGetProperty("tiny_image", out var img) ? (img.GetString() ?? string.Empty) : string.Empty;
                 list.Add(new CatalogSuggestionViewModel
                 {
                     Name = title,
                     AltName = price,
+                    Genre = genres,
                     PosterUrl = poster,
-                    Overview = string.Empty,
-                    Score = string.Empty
+                    Summary = string.Empty,
+                    Score = score,
+                    Price = price
                 });
             }
 
@@ -829,5 +906,15 @@ public class HomeController : Controller
         }
 
         return d[n, m];
+    }
+
+    private static string StripHtml(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return string.Empty;
+        }
+
+        return Regex.Replace(input, "<.*?>", string.Empty).Trim();
     }
 }

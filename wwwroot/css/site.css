@@ -952,6 +952,67 @@ html[data-theme='light'] .catalog-result-item:hover {
   white-space: nowrap;
 }
 
+.media-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+
+.media-item-card {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr) auto;
+  gap: 0.8rem;
+  align-items: start;
+  border: 1px solid var(--card-border);
+  border-radius: 10px;
+  padding: 0.7rem;
+  background: color-mix(in srgb, var(--card-bg) 85%, #0f172a 15%);
+}
+
+.media-item-poster {
+  width: 74px;
+  height: 104px;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  background: #0f172a;
+}
+
+.media-item-poster-empty {
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  text-align: center;
+  padding: 0.2rem;
+}
+
+.media-item-content {
+  min-width: 0;
+}
+
+.media-item-title {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.media-item-line {
+  margin: 0.2rem 0;
+  font-size: 0.87rem;
+  line-height: 1.25;
+}
+
+.media-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-end;
+}
+
+.media-item-actions .btn {
+  min-width: 106px;
+}
+
 @media (max-width: 991px) {
   .dashboard-layout {
     flex-direction: column;
@@ -991,6 +1052,16 @@ html[data-theme='light'] .catalog-result-item:hover {
 
   .watched-panel {
     position: static;
+  }
+
+  .media-item-card {
+    grid-template-columns: 1fr;
+  }
+
+  .media-item-actions {
+    align-items: stretch;
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 
   .settings-music-row {

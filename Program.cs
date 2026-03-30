@@ -131,6 +131,10 @@ using (var scope = app.Services.CreateScope())
     {
         ApplySqliteLegacyFixes(db);
     }
+    else if (db.Database.IsNpgsql())
+    {
+        ApplyPostgresLegacyFixes(db);
+    }
 
     SeedData.Initialize(db);
 }
@@ -167,6 +171,11 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     cmd.CommandText = "PRAGMA table_info('MedyaOgeleri');";
     var hasIzlendi = false;
     var hasAppUserId = false;
+    var hasPosterUrl = false;
+    var hasTur = false;
+    var hasKonu = false;
+    var hasPuan = false;
+    var hasFiyat = false;
     using (var reader = cmd.ExecuteReader())
     {
         while (reader.Read())
@@ -180,6 +189,26 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
             {
                 hasAppUserId = true;
             }
+            if (string.Equals(reader["name"]?.ToString(), "PosterUrl", StringComparison.OrdinalIgnoreCase))
+            {
+                hasPosterUrl = true;
+            }
+            if (string.Equals(reader["name"]?.ToString(), "Tur", StringComparison.OrdinalIgnoreCase))
+            {
+                hasTur = true;
+            }
+            if (string.Equals(reader["name"]?.ToString(), "Konu", StringComparison.OrdinalIgnoreCase))
+            {
+                hasKonu = true;
+            }
+            if (string.Equals(reader["name"]?.ToString(), "Puan", StringComparison.OrdinalIgnoreCase))
+            {
+                hasPuan = true;
+            }
+            if (string.Equals(reader["name"]?.ToString(), "Fiyat", StringComparison.OrdinalIgnoreCase))
+            {
+                hasFiyat = true;
+            }
         }
     }
 
@@ -191,6 +220,26 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     if (!hasAppUserId)
     {
         db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN AppUserId INTEGER NULL;");
+    }
+    if (!hasPosterUrl)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN PosterUrl TEXT NULL;");
+    }
+    if (!hasTur)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Tur TEXT NULL;");
+    }
+    if (!hasKonu)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Konu TEXT NULL;");
+    }
+    if (!hasPuan)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Puan TEXT NULL;");
+    }
+    if (!hasFiyat)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Fiyat TEXT NULL;");
     }
 
     db.Database.ExecuteSqlRaw("""
@@ -325,6 +374,18 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     }
 
     db.SaveChanges();
+}
+
+static void ApplyPostgresLegacyFixes(AppDbContext db)
+{
+    db.Database.ExecuteSqlRaw("""
+        ALTER TABLE "MedyaOgeleri"
+        ADD COLUMN IF NOT EXISTS "PosterUrl" text NULL,
+        ADD COLUMN IF NOT EXISTS "Tur" character varying(240) NULL,
+        ADD COLUMN IF NOT EXISTS "Konu" character varying(3000) NULL,
+        ADD COLUMN IF NOT EXISTS "Puan" character varying(80) NULL,
+        ADD COLUMN IF NOT EXISTS "Fiyat" character varying(80) NULL;
+        """);
 }
 
 static string NormalizePostgresConnectionString(string raw)

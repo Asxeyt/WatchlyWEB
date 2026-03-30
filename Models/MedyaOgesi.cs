@@ -13,6 +13,21 @@ public class MedyaOgesi
     [Required]
     public MedyaKategori Kategori { get; set; }
 
+    [StringLength(600)]
+    public string? PosterUrl { get; set; }
+
+    [StringLength(240)]
+    public string? Tur { get; set; }
+
+    [StringLength(3000)]
+    public string? Konu { get; set; }
+
+    [StringLength(80)]
+    public string? Puan { get; set; }
+
+    [StringLength(80)]
+    public string? Fiyat { get; set; }
+
     public int? AppUserId { get; set; }
 
     public bool Izlendi { get; set; } = false;
