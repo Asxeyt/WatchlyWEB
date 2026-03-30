@@ -635,6 +635,24 @@ html[data-theme='dark'] .category-list-card .list-group-item {
   border-color: rgba(0, 0, 0, 0.25);
 }
 
+html[data-theme='dark'] .category-list-card .media-item-title,
+html[data-theme='dark'] .category-list-card .media-item-line,
+html[data-theme='dark'] .category-list-card .media-item-line strong,
+html[data-theme='dark'] .category-list-card .media-item-poster-empty,
+html[data-theme='dark'] .random-result-card h2,
+html[data-theme='dark'] .category-list-card h2 {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .category-list-card .media-item-title,
+html[data-theme='light'] .category-list-card .media-item-line,
+html[data-theme='light'] .category-list-card .media-item-line strong,
+html[data-theme='light'] .category-list-card .media-item-poster-empty,
+html[data-theme='light'] .random-result-card h2,
+html[data-theme='light'] .category-list-card h2 {
+  color: #111827 !important;
+}
+
 html[data-theme='dark'] .category-sidebar {
   background: #c46954;
 }

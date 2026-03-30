@@ -450,7 +450,7 @@ public class HomeController : Controller
             .Take(40)
             .ToListAsync();
 
-        var targets = rows.Where(NeedsMetadata).Take(6).ToList();
+        var targets = rows.Where(NeedsMetadata).Take(16).ToList();
         if (targets.Count == 0)
         {
             return;
@@ -730,6 +730,26 @@ public class HomeController : Controller
                 {
                     cover = $"https://covers.openlibrary.org/b/id/{coverId.GetInt32()}-M.jpg";
                 }
+                else if (item.TryGetProperty("edition_key", out var editions) &&
+                         editions.ValueKind == JsonValueKind.Array &&
+                         editions.GetArrayLength() > 0)
+                {
+                    var edition = editions[0].GetString() ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(edition))
+                    {
+                        cover = $"https://covers.openlibrary.org/b/olid/{edition}-M.jpg";
+                    }
+                }
+                else if (item.TryGetProperty("isbn", out var isbns) &&
+                         isbns.ValueKind == JsonValueKind.Array &&
+                         isbns.GetArrayLength() > 0)
+                {
+                    var isbn = isbns[0].GetString() ?? string.Empty;
+                    if (!string.IsNullOrWhiteSpace(isbn))
+                    {
+                        cover = $"https://covers.openlibrary.org/b/isbn/{isbn}-M.jpg";
+                    }
+                }
 
                 list.Add(new CatalogSuggestionViewModel
                 {
@@ -830,7 +850,13 @@ public class HomeController : Controller
             return fromYts;
         }
 
-        return await SearchOmdbAsync(query);
+        var fromOmdb = await SearchOmdbAsync(query);
+        if (fromOmdb.Count > 0)
+        {
+            return fromOmdb;
+        }
+
+        return await SearchItunesMoviesAsync(query);
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchYtsAsync(string query)
@@ -940,11 +966,65 @@ public class HomeController : Controller
         }
     }
 
+    private async Task<List<CatalogSuggestionViewModel>> SearchItunesMoviesAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://itunes.apple.com/search?term={Uri.EscapeDataString(query)}&entity=movie&limit=20&country=us";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("results", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in items.EnumerateArray())
+            {
+                var title = item.TryGetProperty("trackName", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var poster = item.TryGetProperty("artworkUrl100", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+                if (!string.IsNullOrWhiteSpace(poster))
+                {
+                    poster = poster.Replace("100x100bb", "300x300bb", StringComparison.OrdinalIgnoreCase);
+                }
+
+                var genre = item.TryGetProperty("primaryGenreName", out var g) ? (g.GetString() ?? string.Empty) : string.Empty;
+                var summary = item.TryGetProperty("longDescription", out var ld)
+                    ? (ld.GetString() ?? string.Empty)
+                    : (item.TryGetProperty("shortDescription", out var sd) ? (sd.GetString() ?? string.Empty) : string.Empty);
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = string.Empty,
+                    Genre = genre,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
+                    Summary = summary,
+                    Score = string.Empty,
+                    Price = string.Empty
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
     private async Task<List<CatalogSuggestionViewModel>> SearchSteamAsync(string query)
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
-        var url = $"https://store.steampowered.com/api/storesearch?term={Uri.EscapeDataString(query)}&l=english&cc=us";
+        var url = $"https://store.steampowered.com/api/storesearch?term={Uri.EscapeDataString(query)}&l=turkish&cc=tr";
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -971,11 +1051,15 @@ public class HomeController : Controller
                     continue;
                 }
 
+                var appId = item.TryGetProperty("id", out var idEl) && idEl.ValueKind == JsonValueKind.Number
+                    ? idEl.GetInt32()
+                    : 0;
+
                 var price = string.Empty;
                 if (item.TryGetProperty("price", out var pr) && pr.ValueKind == JsonValueKind.Object &&
                     pr.TryGetProperty("final", out var finalPrice) && finalPrice.ValueKind == JsonValueKind.Number)
                 {
-                    price = $"${finalPrice.GetInt32() / 100.0:0.00}";
+                    price = $"₺{finalPrice.GetInt32() / 100.0:0.00}";
                 }
                 var score = string.Empty;
                 if (item.TryGetProperty("review_score", out var rv) && rv.ValueKind == JsonValueKind.Number)
@@ -989,7 +1073,7 @@ public class HomeController : Controller
                 }
 
                 var poster = item.TryGetProperty("tiny_image", out var img) ? (img.GetString() ?? string.Empty) : string.Empty;
-                list.Add(new CatalogSuggestionViewModel
+                var dto = new CatalogSuggestionViewModel
                 {
                     Name = title,
                     AltName = price,
@@ -998,7 +1082,21 @@ public class HomeController : Controller
                     Summary = string.Empty,
                     Score = score,
                     Price = price
-                });
+                };
+
+                if (appId > 0 && (string.IsNullOrWhiteSpace(dto.Genre) || string.IsNullOrWhiteSpace(dto.Summary) || string.IsNullOrWhiteSpace(dto.Price)))
+                {
+                    var detail = await GetSteamAppDetailAsync(client, appId);
+                    if (detail is not null)
+                    {
+                        if (string.IsNullOrWhiteSpace(dto.Genre)) dto.Genre = detail.Value.Genre;
+                        if (string.IsNullOrWhiteSpace(dto.Summary)) dto.Summary = detail.Value.Summary;
+                        if (string.IsNullOrWhiteSpace(dto.Price)) dto.Price = detail.Value.Price;
+                        if (string.IsNullOrWhiteSpace(dto.PosterUrl)) dto.PosterUrl = detail.Value.Poster;
+                    }
+                }
+
+                list.Add(dto);
             }
 
             return RankFuzzy(query, list);
@@ -1006,6 +1104,48 @@ public class HomeController : Controller
         catch
         {
             return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private static async Task<(string Genre, string Summary, string Price, string Poster)?> GetSteamAppDetailAsync(HttpClient client, int appId)
+    {
+        var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=turkish&cc=tr";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty(appId.ToString(), out var appNode) ||
+                !appNode.TryGetProperty("success", out var success) ||
+                success.ValueKind != JsonValueKind.True ||
+                !appNode.TryGetProperty("data", out var data))
+            {
+                return null;
+            }
+
+            var genre = string.Empty;
+            if (data.TryGetProperty("genres", out var genres) && genres.ValueKind == JsonValueKind.Array)
+            {
+                genre = string.Join(", ",
+                    genres.EnumerateArray()
+                        .Take(3)
+                        .Select(x => x.TryGetProperty("description", out var d) ? d.GetString() : null)
+                        .Where(x => !string.IsNullOrWhiteSpace(x)));
+            }
+
+            var summary = data.TryGetProperty("short_description", out var sd) ? (sd.GetString() ?? string.Empty) : string.Empty;
+            var price = string.Empty;
+            if (data.TryGetProperty("price_overview", out var po) &&
+                po.TryGetProperty("final_formatted", out var ff))
+            {
+                price = ff.GetString() ?? string.Empty;
+            }
+
+            var poster = data.TryGetProperty("header_image", out var hi) ? (hi.GetString() ?? string.Empty) : string.Empty;
+            return (genre, summary, price, NormalizePosterUrl(poster) ?? string.Empty);
+        }
+        catch
+        {
+            return null;
         }
     }
 
