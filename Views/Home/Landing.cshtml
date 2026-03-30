@@ -17,7 +17,9 @@
         MedyaKategori.Kitap,
         MedyaKategori.Dizi,
         MedyaKategori.Film,
-        MedyaKategori.Oyun
+        MedyaKategori.Oyun,
+        MedyaKategori.CizgiFilm,
+        MedyaKategori.CizgiRoman
     };
 
     string KategoriAdi(MedyaKategori k) => k switch
@@ -26,6 +28,8 @@
         MedyaKategori.Dizi => T("Dizi", "Series"),
         MedyaKategori.Film => T("Film", "Movie"),
         MedyaKategori.Oyun => T("Oyun", "Game"),
+        MedyaKategori.CizgiFilm => T("Cizgi Film", "Cartoon"),
+        MedyaKategori.CizgiRoman => T("Cizgi Roman", "Comic"),
         _ => k.ToString()
     };
 }
@@ -56,6 +60,8 @@
             <li>@T("Dizi: Dark", "Series: Dark")</li>
             <li>@T("Film: Interstellar", "Movie: Interstellar")</li>
             <li>@T("Oyun: The Witcher 3", "Game: The Witcher 3")</li>
+            <li>@T("Cizgi Film: Shrek", "Cartoon: Shrek")</li>
+            <li>@T("Cizgi Roman: Batman: Year One", "Comic: Batman: Year One")</li>
         </ul>
     </div>
 </div>

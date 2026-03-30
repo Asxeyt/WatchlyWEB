@@ -14,6 +14,8 @@
         MedyaKategori.Dizi => T("Dizi", "Series"),
         MedyaKategori.Film => T("Film", "Movie"),
         MedyaKategori.Oyun => T("Oyun", "Game"),
+        MedyaKategori.CizgiFilm => T("Cizgi Film", "Cartoon"),
+        MedyaKategori.CizgiRoman => T("Cizgi Roman", "Comic"),
         _ => k.ToString()
     };
 
@@ -25,6 +27,8 @@
         MedyaKategori.Dizi => "DI",
         MedyaKategori.Film => "FI",
         MedyaKategori.Oyun => "OY",
+        MedyaKategori.CizgiFilm => "CF",
+        MedyaKategori.CizgiRoman => "CR",
         _ => "--"
     };
 
@@ -35,6 +39,7 @@
     {
         MedyaKategori.Kitap => T("Okudum", "Read"),
         MedyaKategori.Manga => T("Okudum", "Read"),
+        MedyaKategori.CizgiRoman => T("Okudum", "Read"),
         MedyaKategori.Oyun => T("Oynadim", "Played"),
         _ => T("Izledim", "Watched")
     };
@@ -43,6 +48,7 @@
     {
         MedyaKategori.Kitap => T("Okuduklarim", "Read Items"),
         MedyaKategori.Manga => T("Okuduklarim", "Read Items"),
+        MedyaKategori.CizgiRoman => T("Okuduklarim", "Read Items"),
         MedyaKategori.Oyun => T("Oynadiklarim", "Played Items"),
         _ => T("Izlediklerim", "Watched")
     };
@@ -55,6 +61,8 @@
         MedyaKategori.Dizi => "Breaking Bad",
         MedyaKategori.Film => "Interstellar",
         MedyaKategori.Oyun => "Elden Ring",
+        MedyaKategori.CizgiFilm => "Shrek",
+        MedyaKategori.CizgiRoman => "Batman: Year One",
         _ => "Interstellar"
     };
 
@@ -114,7 +122,7 @@
     }
 
     var oyunKategori = Model.SeciliKategori == MedyaKategori.Oyun;
-    var kitapKategori = Model.SeciliKategori == MedyaKategori.Kitap;
+    var kitapKategori = Model.SeciliKategori == MedyaKategori.Kitap || Model.SeciliKategori == MedyaKategori.CizgiRoman;
     var puanGoster = !oyunKategori && !kitapKategori;
 }
 

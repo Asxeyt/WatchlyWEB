@@ -648,9 +648,40 @@ html[data-theme='light'] .category-list-card .media-item-title,
 html[data-theme='light'] .category-list-card .media-item-line,
 html[data-theme='light'] .category-list-card .media-item-line strong,
 html[data-theme='light'] .category-list-card .media-item-poster-empty,
-html[data-theme='light'] .random-result-card h2,
-html[data-theme='light'] .category-list-card h2 {
+html[data-theme='light'] .random-result-card h2 {
   color: #111827 !important;
+}
+
+html[data-theme='light'] .category-list-card h2 {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .random-result-card h2 {
+  color: #22c55e !important;
+}
+
+html[data-theme='dark'] .category-list-card .btn-outline-danger {
+  color: #ff4d5a !important;
+  border-color: #ff4d5a !important;
+}
+
+html[data-theme='dark'] .category-list-card .btn-outline-danger:hover,
+html[data-theme='dark'] .category-list-card .btn-outline-danger:focus {
+  color: #ffffff !important;
+  background: #ff4d5a !important;
+  border-color: #ff4d5a !important;
+}
+
+html[data-theme='dark'] .category-list-card .btn-outline-secondary {
+  color: #ffffff !important;
+  border-color: #ffffff !important;
+}
+
+html[data-theme='dark'] .category-list-card .btn-outline-secondary:hover,
+html[data-theme='dark'] .category-list-card .btn-outline-secondary:focus {
+  color: #111827 !important;
+  background: #ffffff !important;
+  border-color: #ffffff !important;
 }
 
 html[data-theme='dark'] .category-sidebar {

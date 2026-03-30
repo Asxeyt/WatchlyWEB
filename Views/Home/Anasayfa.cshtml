@@ -16,7 +16,9 @@
         MedyaKategori.Kitap,
         MedyaKategori.Film,
         MedyaKategori.Dizi,
-        MedyaKategori.Oyun
+        MedyaKategori.Oyun,
+        MedyaKategori.CizgiFilm,
+        MedyaKategori.CizgiRoman
     };
 
     string KategoriAdi(MedyaKategori k) => k switch
@@ -25,6 +27,8 @@
         MedyaKategori.Film => T("FILM", "MOVIE"),
         MedyaKategori.Dizi => T("DIZI", "SERIES"),
         MedyaKategori.Oyun => T("OYUN", "GAME"),
+        MedyaKategori.CizgiFilm => T("CIZGI FILM", "CARTOON"),
+        MedyaKategori.CizgiRoman => T("CIZGI ROMAN", "COMIC"),
         _ => k.ToString().ToUpperInvariant()
     };
 }

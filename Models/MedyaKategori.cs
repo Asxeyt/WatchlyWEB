@@ -7,5 +7,7 @@ public enum MedyaKategori
     Kitap = 3,
     Dizi = 4,
     Film = 5,
-    Oyun = 6
+    Oyun = 6,
+    CizgiFilm = 7,
+    CizgiRoman = 8
 }

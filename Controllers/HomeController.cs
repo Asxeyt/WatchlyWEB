@@ -248,16 +248,7 @@ public class HomeController : Controller
             });
         }
 
-        var providerResults = kategori switch
-        {
-            MedyaKategori.Anime => await SearchJikanAsync(query, true),
-            MedyaKategori.Manga => await SearchJikanAsync(query, false),
-            MedyaKategori.Kitap => await SearchOpenLibraryAsync(query),
-            MedyaKategori.Dizi => await SearchTvMazeAsync(query),
-            MedyaKategori.Film => await SearchMoviesAsync(query),
-            MedyaKategori.Oyun => await SearchSteamAsync(query),
-            _ => new List<CatalogSuggestionViewModel>()
-        };
+        var providerResults = await SearchByCategoryAsync(kategori, query);
 
         var listResults = await SearchFromUserListAsync(query, kategori, userId.Value);
         var results = listResults
@@ -277,6 +268,8 @@ public class HomeController : Controller
                 MedyaKategori.Dizi => currentLang == "en" ? "No series found." : "Boyle bir dizi yok.",
                 MedyaKategori.Film => currentLang == "en" ? "No movie found." : "Boyle bir film yok.",
                 MedyaKategori.Oyun => currentLang == "en" ? "No game found." : "Boyle bir oyun yok.",
+                MedyaKategori.CizgiFilm => currentLang == "en" ? "No cartoon found." : "Boyle bir cizgi film yok.",
+                MedyaKategori.CizgiRoman => currentLang == "en" ? "No comic found." : "Boyle bir cizgi roman yok.",
                 _ => currentLang == "en" ? "No result found." : "Sonuc bulunamadi."
             };
 
@@ -420,6 +413,63 @@ public class HomeController : Controller
         await _dbContext.SaveChangesAsync();
     }
 
+    private async Task<List<CatalogSuggestionViewModel>> SearchByCategoryAsync(MedyaKategori kategori, string query)
+    {
+        var all = new List<CatalogSuggestionViewModel>();
+        foreach (var q in BuildQueryVariants(query))
+        {
+            List<CatalogSuggestionViewModel> part = kategori switch
+            {
+                MedyaKategori.Anime => await SearchJikanAsync(q, true),
+                MedyaKategori.Manga => await SearchJikanAsync(q, false),
+                MedyaKategori.Kitap => await SearchBooksAsync(q, comicsOnly: false),
+                MedyaKategori.Dizi => await SearchTvMazeAsync(q),
+                MedyaKategori.Film => await SearchMoviesAsync(q),
+                MedyaKategori.Oyun => await SearchSteamAsync(q),
+                MedyaKategori.CizgiFilm => await SearchCartoonsAsync(q),
+                MedyaKategori.CizgiRoman => await SearchBooksAsync(q, comicsOnly: true),
+                _ => new List<CatalogSuggestionViewModel>()
+            };
+
+            all.AddRange(part);
+            if (all.Count >= 60)
+            {
+                break;
+            }
+        }
+
+        return RankFuzzy(query, all)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+    }
+
+    private static IEnumerable<string> BuildQueryVariants(string query)
+    {
+        var q = (query ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return Array.Empty<string>();
+        }
+
+        var set = new List<string> { q };
+        if (q.Length > 3)
+        {
+            set.Add(q[..^1]);
+        }
+
+        var words = q.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length >= 2)
+        {
+            set.Add(string.Join(' ', words.Take(1)));
+            set.Add(string.Join(' ', words.Take(2)));
+        }
+
+        return set
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
     private bool NeedsMetadata(MedyaOgesi row)
     {
         if (string.IsNullOrWhiteSpace(row.PosterUrl) ||
@@ -434,7 +484,7 @@ public class HomeController : Controller
             return string.IsNullOrWhiteSpace(row.Fiyat);
         }
 
-        if (row.Kategori == MedyaKategori.Kitap)
+        if (row.Kategori == MedyaKategori.Kitap || row.Kategori == MedyaKategori.CizgiRoman)
         {
             return false;
         }
@@ -474,10 +524,12 @@ public class HomeController : Controller
         {
             MedyaKategori.Anime => await SearchJikanAsync(item.Ad, true),
             MedyaKategori.Manga => await SearchJikanAsync(item.Ad, false),
-            MedyaKategori.Kitap => await SearchOpenLibraryAsync(item.Ad),
+            MedyaKategori.Kitap => await SearchBooksAsync(item.Ad, comicsOnly: false),
             MedyaKategori.Dizi => await SearchTvMazeAsync(item.Ad),
             MedyaKategori.Film => await SearchMoviesAsync(item.Ad),
             MedyaKategori.Oyun => await SearchSteamAsync(item.Ad),
+            MedyaKategori.CizgiFilm => await SearchCartoonsAsync(item.Ad),
+            MedyaKategori.CizgiRoman => await SearchBooksAsync(item.Ad, comicsOnly: true),
             _ => new List<CatalogSuggestionViewModel>()
         };
 
@@ -514,7 +566,7 @@ public class HomeController : Controller
                 changed = true;
             }
         }
-        else if (item.Kategori != MedyaKategori.Kitap)
+        else if (item.Kategori != MedyaKategori.Kitap && item.Kategori != MedyaKategori.CizgiRoman)
         {
             if (string.IsNullOrWhiteSpace(item.Puan) && !string.IsNullOrWhiteSpace(best.Score))
             {
@@ -637,10 +689,22 @@ public class HomeController : Controller
                 {
                     best = Math.Max(best, 0.99);
                 }
+                else
+                {
+                    var qWords = q.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    if (qWords.Length > 0 && qWords.All(w => primary.Contains(w, StringComparison.Ordinal)))
+                    {
+                        best = Math.Max(best, 0.92);
+                    }
+                    if (qWords.Length > 0 && qWords.Any(w => primary.StartsWith(w, StringComparison.Ordinal)))
+                    {
+                        best = Math.Max(best, 0.65);
+                    }
+                }
 
                 return new { Item = x, Score = best };
             })
-            .Where(x => x.Score >= 0.25)
+            .Where(x => x.Score >= 0.16)
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Item.Name)
             .Select(x => x.Item)
@@ -669,6 +733,118 @@ public class HomeController : Controller
             .ToList();
 
         return RankFuzzy(query, local);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchBooksAsync(string query, bool comicsOnly)
+    {
+        var open = await SearchOpenLibraryAsync(query);
+        var google = await SearchGoogleBooksAsync(query, comicsOnly);
+
+        var merged = open.Concat(google)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+
+        if (comicsOnly)
+        {
+            merged = merged
+                .Where(x =>
+                    (x.Genre ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Genre ?? string.Empty).Contains("graphic", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Name ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Summary ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
+        return RankFuzzy(query, merged);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchGoogleBooksAsync(string query, bool comicsOnly)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var q = comicsOnly ? $"{query} comic graphic novel" : query;
+        var url = $"https://www.googleapis.com/books/v1/volumes?q={Uri.EscapeDataString(q)}&maxResults=20&langRestrict={(comicsOnly ? "en" : "tr")}";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in items.EnumerateArray())
+            {
+                if (!item.TryGetProperty("volumeInfo", out var vi))
+                {
+                    continue;
+                }
+
+                var title = vi.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var author = string.Empty;
+                if (vi.TryGetProperty("authors", out var authors) && authors.ValueKind == JsonValueKind.Array)
+                {
+                    author = string.Join(", ", authors.EnumerateArray().Take(2).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
+
+                var genre = string.Empty;
+                if (vi.TryGetProperty("categories", out var categories) && categories.ValueKind == JsonValueKind.Array)
+                {
+                    genre = string.Join(", ", categories.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
+
+                var summary = vi.TryGetProperty("description", out var d) ? (d.GetString() ?? string.Empty) : string.Empty;
+                var poster = string.Empty;
+                if (vi.TryGetProperty("imageLinks", out var il) && il.TryGetProperty("thumbnail", out var th))
+                {
+                    poster = th.GetString() ?? string.Empty;
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = author,
+                    Genre = genre,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
+                    Summary = summary,
+                    Score = string.Empty,
+                    Price = string.Empty
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchCartoonsAsync(string query)
+    {
+        var tv = await SearchTvMazeAsync($"{query} animation");
+        var movies = await SearchMoviesAsync($"{query} animation");
+
+        var merged = tv.Concat(movies)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+
+        var filtered = merged
+            .Where(x =>
+                (x.Genre ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
+                (x.Summary ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return RankFuzzy(query, filtered.Count > 0 ? filtered : merged);
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchOpenLibraryAsync(string query)
