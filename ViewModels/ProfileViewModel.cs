@@ -10,6 +10,12 @@ public class ProfileViewModel
 
     public string? AvatarImagePath { get; set; }
 
+    public double AvatarZoom { get; set; } = 1.0;
+
+    public int AvatarPosX { get; set; } = 50;
+
+    public int AvatarPosY { get; set; } = 50;
+
     public int AnimeCount { get; set; }
     public int MangaCount { get; set; }
     public int KitapCount { get; set; }

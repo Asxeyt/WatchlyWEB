@@ -256,6 +256,9 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
             GoogleSubject TEXT NULL,
             CoverImagePath TEXT NULL,
             AvatarImagePath TEXT NULL,
+            AvatarZoom REAL NOT NULL DEFAULT 1.0,
+            AvatarPosX INTEGER NOT NULL DEFAULT 50,
+            AvatarPosY INTEGER NOT NULL DEFAULT 50,
             CreatedAt TEXT NOT NULL
         );
         """);
@@ -271,6 +274,9 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     var hasEmailVerificationExpiresAt = false;
     var hasCoverImagePath = false;
     var hasAvatarImagePath = false;
+    var hasAvatarZoom = false;
+    var hasAvatarPosX = false;
+    var hasAvatarPosY = false;
     using (var userReader = userCmd.ExecuteReader())
     {
         while (userReader.Read())
@@ -300,6 +306,18 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
             {
                 hasAvatarImagePath = true;
             }
+            if (string.Equals(col, "AvatarZoom", StringComparison.OrdinalIgnoreCase))
+            {
+                hasAvatarZoom = true;
+            }
+            if (string.Equals(col, "AvatarPosX", StringComparison.OrdinalIgnoreCase))
+            {
+                hasAvatarPosX = true;
+            }
+            if (string.Equals(col, "AvatarPosY", StringComparison.OrdinalIgnoreCase))
+            {
+                hasAvatarPosY = true;
+            }
         }
     }
 
@@ -326,6 +344,18 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     if (!hasAvatarImagePath)
     {
         db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarImagePath TEXT NULL;");
+    }
+    if (!hasAvatarZoom)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarZoom REAL NOT NULL DEFAULT 1.0;");
+    }
+    if (!hasAvatarPosX)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarPosX INTEGER NOT NULL DEFAULT 50;");
+    }
+    if (!hasAvatarPosY)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE AppUsers ADD COLUMN AvatarPosY INTEGER NOT NULL DEFAULT 50;");
     }
 
     var users = db.AppUsers.OrderBy(x => x.Id).ToList();
@@ -385,6 +415,13 @@ static void ApplyPostgresLegacyFixes(AppDbContext db)
         ADD COLUMN IF NOT EXISTS "Konu" character varying(3000) NULL,
         ADD COLUMN IF NOT EXISTS "Puan" character varying(80) NULL,
         ADD COLUMN IF NOT EXISTS "Fiyat" character varying(80) NULL;
+        """);
+
+    db.Database.ExecuteSqlRaw("""
+        ALTER TABLE "AppUsers"
+        ADD COLUMN IF NOT EXISTS "AvatarZoom" double precision NOT NULL DEFAULT 1.0,
+        ADD COLUMN IF NOT EXISTS "AvatarPosX" integer NOT NULL DEFAULT 50,
+        ADD COLUMN IF NOT EXISTS "AvatarPosY" integer NOT NULL DEFAULT 50;
         """);
 }
 

@@ -39,5 +39,11 @@ public class AppUser
     [StringLength(400)]
     public string? AvatarImagePath { get; set; }
 
+    public double AvatarZoom { get; set; } = 1.0;
+
+    public int AvatarPosX { get; set; } = 50;
+
+    public int AvatarPosY { get; set; } = 50;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

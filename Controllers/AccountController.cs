@@ -437,6 +437,9 @@ public class AccountController : Controller
             DisplayName = string.IsNullOrWhiteSpace(user.UserName) ? user.Email : user.UserName,
             CoverImagePath = user.CoverImagePath,
             AvatarImagePath = user.AvatarImagePath,
+            AvatarZoom = user.AvatarZoom <= 0 ? 1.0 : user.AvatarZoom,
+            AvatarPosX = Math.Clamp(user.AvatarPosX, 0, 100),
+            AvatarPosY = Math.Clamp(user.AvatarPosY, 0, 100),
             AnimeCount = CountFor(MedyaKategori.Anime),
             MangaCount = CountFor(MedyaKategori.Manga),
             KitapCount = CountFor(MedyaKategori.Kitap),
@@ -451,7 +454,7 @@ public class AccountController : Controller
     [Authorize]
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> UploadProfileMedia(IFormFile? coverFile, IFormFile? avatarFile, string lang = "tr")
+    public async Task<IActionResult> UploadProfileMedia(IFormFile? coverFile, IFormFile? avatarFile, double? avatarZoom, int? avatarPosX, int? avatarPosY, string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
         var userId = GetCurrentUserId();
@@ -485,6 +488,21 @@ public class AccountController : Controller
             {
                 user.AvatarImagePath = $"/user-media/{user.Id}/{avatarPath}";
             }
+        }
+
+        if (avatarZoom.HasValue)
+        {
+            user.AvatarZoom = Math.Clamp(avatarZoom.Value, 1.0, 2.5);
+        }
+
+        if (avatarPosX.HasValue)
+        {
+            user.AvatarPosX = Math.Clamp(avatarPosX.Value, 0, 100);
+        }
+
+        if (avatarPosY.HasValue)
+        {
+            user.AvatarPosY = Math.Clamp(avatarPosY.Value, 0, 100);
         }
 
         await _dbContext.SaveChangesAsync();

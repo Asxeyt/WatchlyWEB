@@ -64,6 +64,10 @@
     string KonuEtiketi() => T("Konu", "Summary");
     string PuanEtiketi() => T("Puan", "Score");
     string FiyatEtiketi() => T("Fiyat", "Price");
+
+    var oyunKategori = Model.SeciliKategori == MedyaKategori.Oyun;
+    var kitapKategori = Model.SeciliKategori == MedyaKategori.Kitap;
+    var puanGoster = !oyunKategori && !kitapKategori;
 }
 
 <div class="dashboard-page">
@@ -104,7 +108,7 @@
                 {
                     <div class="card mb-3 category-list-card random-result-card">
                         <div class="card-body">
-                            <h2 class="h5 mb-3">@T("Rastgele Secim", "Random Pick")</h2>
+                            <h2 class="h5 mb-3">@T("Secilen", "Selected")</h2>
                             @if (Model.RastgeleSecilenDetay is not null)
                             {
                                 <article class="media-item-card">
@@ -121,11 +125,14 @@
                                     <div class="media-item-content">
                                         <h3 class="media-item-title">@Model.RastgeleSecilenDetay.Ad</h3>
                                         <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Tur) ? BilgiYok() : Model.RastgeleSecilenDetay.Tur)</p>
-                                        <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : Model.RastgeleSecilenDetay.Konu)</p>
-                                        <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Puan) ? BilgiYok() : Model.RastgeleSecilenDetay.Puan)</p>
-                                        @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Fiyat))
+                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : Model.RastgeleSecilenDetay.Konu)</p>
+                                        @if (oyunKategori)
                                         {
-                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @Model.RastgeleSecilenDetay.Fiyat</p>
+                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Fiyat) ? BilgiYok() : Model.RastgeleSecilenDetay.Fiyat)</p>
+                                        }
+                                        else if (puanGoster)
+                                        {
+                                            <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Puan) ? BilgiYok() : Model.RastgeleSecilenDetay.Puan)</p>
                                         }
                                     </div>
                                 </article>
@@ -201,11 +208,14 @@
                                         <div class="media-item-content">
                                             <h3 class="media-item-title">@item.Ad</h3>
                                             <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : item.Tur)</p>
-                                            <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
-                                            <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
-                                            @if (!string.IsNullOrWhiteSpace(item.Fiyat))
+                                            <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
+                                            @if (oyunKategori)
                                             {
-                                                <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @item.Fiyat</p>
+                                                <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Fiyat) ? BilgiYok() : item.Fiyat)</p>
+                                            }
+                                            else if (puanGoster)
+                                            {
+                                                <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
                                             }
                                         </div>
                                         <div class="media-item-actions">
@@ -256,11 +266,14 @@
                                     <div class="media-item-content">
                                         <h3 class="media-item-title">@item.Ad</h3>
                                         <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : item.Tur)</p>
-                                        <p class="media-item-line"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
-                                        <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
-                                        @if (!string.IsNullOrWhiteSpace(item.Fiyat))
+                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : item.Konu)</p>
+                                        @if (oyunKategori)
                                         {
-                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @item.Fiyat</p>
+                                            <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Fiyat) ? BilgiYok() : item.Fiyat)</p>
+                                        }
+                                        else if (puanGoster)
+                                        {
+                                            <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
                                         }
                                     </div>
                                     <div class="media-item-actions">

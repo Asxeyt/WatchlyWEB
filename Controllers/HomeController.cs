@@ -94,7 +94,7 @@ public class HomeController : Controller
         {
             Ad = form.YeniOgeAdi.Trim(),
             Kategori = seciliKategori,
-            PosterUrl = CleanValue(form.YeniOgePosterUrl, 600),
+            PosterUrl = NormalizePosterUrl(CleanValue(form.YeniOgePosterUrl, 600)),
             Tur = CleanValue(form.YeniOgeTur, 240),
             Konu = CleanValue(form.YeniOgeKonu, 3000),
             Puan = CleanValue(form.YeniOgePuan, 80),
@@ -102,6 +102,8 @@ public class HomeController : Controller
             AppUserId = userId.Value,
             Izlendi = false
         };
+
+        await FillMissingMetadataAsync(yeniKayit);
 
         _dbContext.MedyaOgeleri.Add(yeniKayit);
         await _dbContext.SaveChangesAsync();
@@ -313,6 +315,8 @@ public class HomeController : Controller
     {
         var currentLang = NormalizeLang(lang);
 
+        await EnrichMissingMetadataInCategoryAsync(seciliKategori, userId);
+
         var seciliListe = await _dbContext.MedyaOgeleri
             .Where(x => x.Kategori == seciliKategori && x.AppUserId == userId)
             .OrderBy(x => x.Ad)
@@ -361,6 +365,22 @@ public class HomeController : Controller
         return trimmed.Length <= maxLength ? trimmed : trimmed[..maxLength];
     }
 
+    private static string? NormalizePosterUrl(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return null;
+        }
+
+        var v = value.Trim();
+        if (v.StartsWith("//"))
+        {
+            return $"https:{v}";
+        }
+
+        return v;
+    }
+
     private MedyaOgesi? FindRandomDetailFromTempData(List<MedyaOgesi> seciliListe)
     {
         var idRaw = TempData["RastgeleSonucId"]?.ToString();
@@ -398,6 +418,112 @@ public class HomeController : Controller
         }
 
         await _dbContext.SaveChangesAsync();
+    }
+
+    private bool NeedsMetadata(MedyaOgesi row)
+    {
+        if (string.IsNullOrWhiteSpace(row.PosterUrl) ||
+            string.IsNullOrWhiteSpace(row.Tur) ||
+            string.IsNullOrWhiteSpace(row.Konu))
+        {
+            return true;
+        }
+
+        if (row.Kategori == MedyaKategori.Oyun)
+        {
+            return string.IsNullOrWhiteSpace(row.Fiyat);
+        }
+
+        if (row.Kategori == MedyaKategori.Kitap)
+        {
+            return false;
+        }
+
+        return string.IsNullOrWhiteSpace(row.Puan);
+    }
+
+    private async Task EnrichMissingMetadataInCategoryAsync(MedyaKategori kategori, int userId)
+    {
+        var rows = await _dbContext.MedyaOgeleri
+            .Where(x => x.AppUserId == userId && x.Kategori == kategori)
+            .OrderByDescending(x => x.OlusturmaTarihi)
+            .Take(40)
+            .ToListAsync();
+
+        var targets = rows.Where(NeedsMetadata).Take(6).ToList();
+        if (targets.Count == 0)
+        {
+            return;
+        }
+
+        var changed = false;
+        foreach (var item in targets)
+        {
+            changed |= await FillMissingMetadataAsync(item);
+        }
+
+        if (changed)
+        {
+            await _dbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task<bool> FillMissingMetadataAsync(MedyaOgesi item)
+    {
+        var suggestions = item.Kategori switch
+        {
+            MedyaKategori.Anime => await SearchJikanAsync(item.Ad, true),
+            MedyaKategori.Manga => await SearchJikanAsync(item.Ad, false),
+            MedyaKategori.Kitap => await SearchOpenLibraryAsync(item.Ad),
+            MedyaKategori.Dizi => await SearchTvMazeAsync(item.Ad),
+            MedyaKategori.Film => await SearchMoviesAsync(item.Ad),
+            MedyaKategori.Oyun => await SearchSteamAsync(item.Ad),
+            _ => new List<CatalogSuggestionViewModel>()
+        };
+
+        var best = suggestions.FirstOrDefault();
+        if (best is null)
+        {
+            return false;
+        }
+
+        var changed = false;
+        if (string.IsNullOrWhiteSpace(item.PosterUrl) && !string.IsNullOrWhiteSpace(best.PosterUrl))
+        {
+            item.PosterUrl = NormalizePosterUrl(CleanValue(best.PosterUrl, 600));
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Tur) && !string.IsNullOrWhiteSpace(best.Genre))
+        {
+            item.Tur = CleanValue(best.Genre, 240);
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(item.Konu) && !string.IsNullOrWhiteSpace(best.Summary))
+        {
+            item.Konu = CleanValue(best.Summary, 3000);
+            changed = true;
+        }
+
+        if (item.Kategori == MedyaKategori.Oyun)
+        {
+            if (string.IsNullOrWhiteSpace(item.Fiyat) && !string.IsNullOrWhiteSpace(best.Price))
+            {
+                item.Fiyat = CleanValue(best.Price, 80);
+                changed = true;
+            }
+        }
+        else if (item.Kategori != MedyaKategori.Kitap)
+        {
+            if (string.IsNullOrWhiteSpace(item.Puan) && !string.IsNullOrWhiteSpace(best.Score))
+            {
+                item.Puan = CleanValue(best.Score, 80);
+                changed = true;
+            }
+        }
+
+        return changed;
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchJikanAsync(string query, bool anime)
@@ -467,7 +593,7 @@ public class HomeController : Controller
                     Name = title,
                     AltName = englishTitle,
                     Genre = genres,
-                    PosterUrl = poster,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = synopsis,
                     Score = score,
                     Price = string.Empty
@@ -528,7 +654,7 @@ public class HomeController : Controller
             .Select(x => new CatalogSuggestionViewModel
             {
                 Name = x.Ad,
-                PosterUrl = x.PosterUrl ?? string.Empty,
+                PosterUrl = NormalizePosterUrl(x.PosterUrl) ?? string.Empty,
                 Genre = x.Tur ?? string.Empty,
                 Summary = x.Konu ?? string.Empty,
                 Score = x.Puan ?? string.Empty,
@@ -582,6 +708,23 @@ public class HomeController : Controller
                     year = y.GetInt32().ToString();
                 }
 
+                var summary = string.Empty;
+                if (item.TryGetProperty("first_sentence", out var fs))
+                {
+                    if (fs.ValueKind == JsonValueKind.String)
+                    {
+                        summary = fs.GetString() ?? string.Empty;
+                    }
+                    else if (fs.ValueKind == JsonValueKind.Array && fs.GetArrayLength() > 0)
+                    {
+                        summary = fs[0].GetString() ?? string.Empty;
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(summary) && !string.IsNullOrWhiteSpace(year))
+                {
+                    summary = $"Yayin: {year}";
+                }
+
                 var cover = string.Empty;
                 if (item.TryGetProperty("cover_i", out var coverId) && coverId.ValueKind == JsonValueKind.Number)
                 {
@@ -593,8 +736,8 @@ public class HomeController : Controller
                     Name = title,
                     AltName = author,
                     Genre = author,
-                    PosterUrl = cover,
-                    Summary = year,
+                    PosterUrl = NormalizePosterUrl(cover) ?? string.Empty,
+                    Summary = summary,
                     Score = string.Empty,
                     Price = string.Empty
                 });
@@ -664,7 +807,7 @@ public class HomeController : Controller
                     Name = title,
                     AltName = genres,
                     Genre = genres,
-                    PosterUrl = poster,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = rating,
                     Price = string.Empty
@@ -730,7 +873,7 @@ public class HomeController : Controller
                     Name = title,
                     AltName = year,
                     Genre = genres,
-                    PosterUrl = poster,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = score,
                     Price = string.Empty
@@ -782,7 +925,7 @@ public class HomeController : Controller
                     Name = title,
                     AltName = year,
                     Genre = string.Empty,
-                    PosterUrl = poster == "N/A" ? string.Empty : poster,
+                    PosterUrl = NormalizePosterUrl(poster == "N/A" ? string.Empty : poster) ?? string.Empty,
                     Summary = string.Empty,
                     Score = string.Empty,
                     Price = string.Empty
@@ -851,7 +994,7 @@ public class HomeController : Controller
                     Name = title,
                     AltName = price,
                     Genre = genres,
-                    PosterUrl = poster,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = string.Empty,
                     Score = score,
                     Price = price
