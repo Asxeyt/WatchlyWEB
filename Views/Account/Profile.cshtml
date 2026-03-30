@@ -7,7 +7,6 @@
     var coverStyle = string.IsNullOrWhiteSpace(Model.CoverImagePath)
         ? "background-image: linear-gradient(135deg, #0b1222, #0f172a 55%, #1e293b);"
         : $"background-image: linear-gradient(rgba(2,6,23,.32), rgba(2,6,23,.75)), url('{Model.CoverImagePath}');";
-    var avatarStyle = $"object-position:{Model.AvatarPosX}% {Model.AvatarPosY}%; transform:scale({Model.AvatarZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)});";
 }
 
 <section class="profile-shell">
@@ -26,9 +25,7 @@
         <div class="profile-avatar-wrap">
             @if (!string.IsNullOrWhiteSpace(Model.AvatarImagePath))
             {
-                <div class="profile-avatar-cropper">
-                    <img src="@Model.AvatarImagePath" alt="avatar" class="profile-avatar-lg profile-avatar-zoomable" style="@avatarStyle" />
-                </div>
+                <img src="@Model.AvatarImagePath" alt="avatar" class="profile-avatar-lg" />
             }
             else
             {
@@ -44,29 +41,6 @@
                     <input type="file" name="avatarFile" class="d-none" accept=".jpg,.jpeg,.png,.webp" onchange="this.form.submit()" />
                 </label>
             </form>
-
-            @if (!string.IsNullOrWhiteSpace(Model.AvatarImagePath))
-            {
-                <form asp-controller="Account" asp-action="UploadProfileMedia" method="post" class="avatar-adjust-form mt-2">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="lang" value="@Model.Lang" />
-                    <input type="hidden" name="avatarZoom" id="avatarZoomInput" value="@Model.AvatarZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                    <input type="hidden" name="avatarPosX" id="avatarPosXInput" value="@Model.AvatarPosX" />
-                    <input type="hidden" name="avatarPosY" id="avatarPosYInput" value="@Model.AvatarPosY" />
-                    <div class="avatar-adjust-grid">
-                        <label>@T("Buyukluk", "Zoom")
-                            <input type="range" id="avatarZoomRange" min="1" max="2.5" step="0.01" value="@Model.AvatarZoom.ToString(System.Globalization.CultureInfo.InvariantCulture)" />
-                        </label>
-                        <label>X
-                            <input type="range" id="avatarPosXRange" min="0" max="100" step="1" value="@Model.AvatarPosX" />
-                        </label>
-                        <label>Y
-                            <input type="range" id="avatarPosYRange" min="0" max="100" step="1" value="@Model.AvatarPosY" />
-                        </label>
-                    </div>
-                    <button type="submit" class="btn btn-sm btn-outline-light mt-2">@T("Fotografi ayarla", "Adjust photo")</button>
-                </form>
-            }
         </div>
 
         <div class="profile-title-area">
@@ -104,34 +78,3 @@
 
     <div class="profile-future-space"></div>
 </section>
-
-@section Scripts {
-<script>
-(() => {
-  const img = document.querySelector('.profile-avatar-zoomable');
-  const zoomRange = document.getElementById('avatarZoomRange');
-  const xRange = document.getElementById('avatarPosXRange');
-  const yRange = document.getElementById('avatarPosYRange');
-  const zoomInput = document.getElementById('avatarZoomInput');
-  const xInput = document.getElementById('avatarPosXInput');
-  const yInput = document.getElementById('avatarPosYInput');
-  if (!img || !zoomRange || !xRange || !yRange || !zoomInput || !xInput || !yInput) return;
-
-  function updatePreview() {
-    const z = parseFloat(zoomRange.value || '1');
-    const x = parseInt(xRange.value || '50', 10);
-    const y = parseInt(yRange.value || '50', 10);
-    img.style.transform = `scale(${z})`;
-    img.style.objectPosition = `${x}% ${y}%`;
-    zoomInput.value = String(z);
-    xInput.value = String(x);
-    yInput.value = String(y);
-  }
-
-  zoomRange.addEventListener('input', updatePreview);
-  xRange.addEventListener('input', updatePreview);
-  yRange.addEventListener('input', updatePreview);
-  updatePreview();
-})();
-</script>
-}

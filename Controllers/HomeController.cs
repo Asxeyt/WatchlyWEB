@@ -103,7 +103,7 @@ public class HomeController : Controller
             Izlendi = false
         };
 
-        await FillMissingMetadataAsync(yeniKayit);
+        await FillMissingMetadataAsync(yeniKayit, lang);
 
         _dbContext.MedyaOgeleri.Add(yeniKayit);
         await _dbContext.SaveChangesAsync();
@@ -248,7 +248,7 @@ public class HomeController : Controller
             });
         }
 
-        var providerResults = await SearchByCategoryAsync(kategori, query);
+        var providerResults = await SearchByCategoryAsync(kategori, query, currentLang);
 
         var listResults = await SearchFromUserListAsync(query, kategori, userId.Value);
         var results = listResults
@@ -308,7 +308,7 @@ public class HomeController : Controller
     {
         var currentLang = NormalizeLang(lang);
 
-        await EnrichMissingMetadataInCategoryAsync(seciliKategori, userId);
+        await EnrichMissingMetadataInCategoryAsync(seciliKategori, userId, currentLang);
 
         var seciliListe = await _dbContext.MedyaOgeleri
             .Where(x => x.Kategori == seciliKategori && x.AppUserId == userId)
@@ -413,7 +413,7 @@ public class HomeController : Controller
         await _dbContext.SaveChangesAsync();
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchByCategoryAsync(MedyaKategori kategori, string query)
+    private async Task<List<CatalogSuggestionViewModel>> SearchByCategoryAsync(MedyaKategori kategori, string query, string lang)
     {
         var all = new List<CatalogSuggestionViewModel>();
         foreach (var q in BuildQueryVariants(query))
@@ -422,12 +422,12 @@ public class HomeController : Controller
             {
                 MedyaKategori.Anime => await SearchJikanAsync(q, true),
                 MedyaKategori.Manga => await SearchJikanAsync(q, false),
-                MedyaKategori.Kitap => await SearchBooksAsync(q, comicsOnly: false),
+                MedyaKategori.Kitap => await SearchBooksAsync(q, comicsOnly: false, lang),
                 MedyaKategori.Dizi => await SearchTvMazeAsync(q),
                 MedyaKategori.Film => await SearchMoviesAsync(q),
-                MedyaKategori.Oyun => await SearchSteamAsync(q),
-                MedyaKategori.CizgiFilm => await SearchCartoonsAsync(q),
-                MedyaKategori.CizgiRoman => await SearchBooksAsync(q, comicsOnly: true),
+                MedyaKategori.Oyun => await SearchSteamAsync(q, lang),
+                MedyaKategori.CizgiFilm => await SearchCartoonsAsync(q, lang),
+                MedyaKategori.CizgiRoman => await SearchBooksAsync(q, comicsOnly: true, lang),
                 _ => new List<CatalogSuggestionViewModel>()
             };
 
@@ -492,7 +492,7 @@ public class HomeController : Controller
         return string.IsNullOrWhiteSpace(row.Puan);
     }
 
-    private async Task EnrichMissingMetadataInCategoryAsync(MedyaKategori kategori, int userId)
+    private async Task EnrichMissingMetadataInCategoryAsync(MedyaKategori kategori, int userId, string lang)
     {
         var rows = await _dbContext.MedyaOgeleri
             .Where(x => x.AppUserId == userId && x.Kategori == kategori)
@@ -509,7 +509,7 @@ public class HomeController : Controller
         var changed = false;
         foreach (var item in targets)
         {
-            changed |= await FillMissingMetadataAsync(item);
+            changed |= await FillMissingMetadataAsync(item, lang);
         }
 
         if (changed)
@@ -518,18 +518,18 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<bool> FillMissingMetadataAsync(MedyaOgesi item)
+    private async Task<bool> FillMissingMetadataAsync(MedyaOgesi item, string lang)
     {
         var suggestions = item.Kategori switch
         {
             MedyaKategori.Anime => await SearchJikanAsync(item.Ad, true),
             MedyaKategori.Manga => await SearchJikanAsync(item.Ad, false),
-            MedyaKategori.Kitap => await SearchBooksAsync(item.Ad, comicsOnly: false),
+            MedyaKategori.Kitap => await SearchBooksAsync(item.Ad, comicsOnly: false, lang),
             MedyaKategori.Dizi => await SearchTvMazeAsync(item.Ad),
             MedyaKategori.Film => await SearchMoviesAsync(item.Ad),
-            MedyaKategori.Oyun => await SearchSteamAsync(item.Ad),
-            MedyaKategori.CizgiFilm => await SearchCartoonsAsync(item.Ad),
-            MedyaKategori.CizgiRoman => await SearchBooksAsync(item.Ad, comicsOnly: true),
+            MedyaKategori.Oyun => await SearchSteamAsync(item.Ad, lang),
+            MedyaKategori.CizgiFilm => await SearchCartoonsAsync(item.Ad, lang),
+            MedyaKategori.CizgiRoman => await SearchBooksAsync(item.Ad, comicsOnly: true, lang),
             _ => new List<CatalogSuggestionViewModel>()
         };
 
@@ -704,7 +704,7 @@ public class HomeController : Controller
 
                 return new { Item = x, Score = best };
             })
-            .Where(x => x.Score >= 0.16)
+            .Where(x => x.Score >= 0.10)
             .OrderByDescending(x => x.Score)
             .ThenBy(x => x.Item.Name)
             .Select(x => x.Item)
@@ -735,10 +735,10 @@ public class HomeController : Controller
         return RankFuzzy(query, local);
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchBooksAsync(string query, bool comicsOnly)
+    private async Task<List<CatalogSuggestionViewModel>> SearchBooksAsync(string query, bool comicsOnly, string lang)
     {
-        var open = await SearchOpenLibraryAsync(query);
-        var google = await SearchGoogleBooksAsync(query, comicsOnly);
+        var open = await SearchOpenLibraryAsync(query, lang);
+        var google = await SearchGoogleBooksAsync(query, comicsOnly, lang);
 
         var merged = open.Concat(google)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
@@ -747,24 +747,29 @@ public class HomeController : Controller
 
         if (comicsOnly)
         {
-            merged = merged
+            var filtered = merged
                 .Where(x =>
                     (x.Genre ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
                     (x.Genre ?? string.Empty).Contains("graphic", StringComparison.OrdinalIgnoreCase) ||
                     (x.Name ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
                     (x.Summary ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase))
                 .ToList();
+            if (filtered.Count > 0)
+            {
+                merged = filtered;
+            }
         }
 
         return RankFuzzy(query, merged);
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchGoogleBooksAsync(string query, bool comicsOnly)
+    private async Task<List<CatalogSuggestionViewModel>> SearchGoogleBooksAsync(string query, bool comicsOnly, string lang)
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
         var q = comicsOnly ? $"{query} comic graphic novel" : query;
-        var url = $"https://www.googleapis.com/books/v1/volumes?q={Uri.EscapeDataString(q)}&maxResults=20&langRestrict={(comicsOnly ? "en" : "tr")}";
+        var langRestrict = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+        var url = $"https://www.googleapis.com/books/v1/volumes?q={Uri.EscapeDataString(q)}&maxResults=20&langRestrict={langRestrict}";
         try
         {
             await using var stream = await client.GetStreamAsync(url);
@@ -827,7 +832,7 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchCartoonsAsync(string query)
+    private async Task<List<CatalogSuggestionViewModel>> SearchCartoonsAsync(string query, string lang)
     {
         var tv = await SearchTvMazeAsync($"{query} animation");
         var movies = await SearchMoviesAsync($"{query} animation");
@@ -841,13 +846,14 @@ public class HomeController : Controller
             .Where(x =>
                 (x.Genre ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
                 (x.Summary ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
-                (x.Name ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase))
+                (x.Name ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("anime", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         return RankFuzzy(query, filtered.Count > 0 ? filtered : merged);
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchOpenLibraryAsync(string query)
+    private async Task<List<CatalogSuggestionViewModel>> SearchOpenLibraryAsync(string query, string lang)
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
@@ -898,7 +904,9 @@ public class HomeController : Controller
                 }
                 if (string.IsNullOrWhiteSpace(summary) && !string.IsNullOrWhiteSpace(year))
                 {
-                    summary = $"Yayin: {year}";
+                    summary = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase)
+                        ? $"Published: {year}"
+                        : $"Yayin: {year}";
                 }
 
                 var cover = string.Empty;
@@ -1020,6 +1028,12 @@ public class HomeController : Controller
 
     private async Task<List<CatalogSuggestionViewModel>> SearchMoviesAsync(string query)
     {
+        var normalized = (query ?? string.Empty).Trim().ToLowerInvariant();
+        if (normalized is "film" or "flim" or "movie")
+        {
+            return await SearchYtsPopularAsync();
+        }
+
         var fromYts = await SearchYtsAsync(query);
         if (fromYts.Count > 0)
         {
@@ -1033,6 +1047,58 @@ public class HomeController : Controller
         }
 
         return await SearchItunesMoviesAsync(query);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchYtsPopularAsync()
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = "https://yts.mx/api/v2/list_movies.json?limit=20&sort_by=rating";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("movies", out var movies) ||
+                movies.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in movies.EnumerateArray())
+            {
+                var title = item.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var score = item.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble().ToString("0.0") : string.Empty;
+                var poster = item.TryGetProperty("medium_cover_image", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+                var summary = item.TryGetProperty("summary", out var sm) ? (sm.GetString() ?? string.Empty) : string.Empty;
+                var genres = string.Empty;
+                if (item.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array)
+                {
+                    genres = string.Join(", ", gs.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)));
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    Genre = genres,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
+                    Summary = summary,
+                    Score = score
+                });
+            }
+
+            return list;
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchYtsAsync(string query)
@@ -1196,11 +1262,14 @@ public class HomeController : Controller
         }
     }
 
-    private async Task<List<CatalogSuggestionViewModel>> SearchSteamAsync(string query)
+    private async Task<List<CatalogSuggestionViewModel>> SearchSteamAsync(string query, string lang)
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
-        var url = $"https://store.steampowered.com/api/storesearch?term={Uri.EscapeDataString(query)}&l=turkish&cc=tr";
+        var en = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var storeLang = en ? "english" : "turkish";
+        var cc = en ? "us" : "tr";
+        var url = $"https://store.steampowered.com/api/storesearch?term={Uri.EscapeDataString(query)}&l={storeLang}&cc={cc}";
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
@@ -1235,7 +1304,9 @@ public class HomeController : Controller
                 if (item.TryGetProperty("price", out var pr) && pr.ValueKind == JsonValueKind.Object &&
                     pr.TryGetProperty("final", out var finalPrice) && finalPrice.ValueKind == JsonValueKind.Number)
                 {
-                    price = $"₺{finalPrice.GetInt32() / 100.0:0.00}";
+                    price = en
+                        ? $"${finalPrice.GetInt32() / 100.0:0.00}"
+                        : $"?{finalPrice.GetInt32() / 100.0:0.00}";
                 }
                 var score = string.Empty;
                 if (item.TryGetProperty("review_score", out var rv) && rv.ValueKind == JsonValueKind.Number)
@@ -1262,7 +1333,7 @@ public class HomeController : Controller
 
                 if (appId > 0 && (string.IsNullOrWhiteSpace(dto.Genre) || string.IsNullOrWhiteSpace(dto.Summary) || string.IsNullOrWhiteSpace(dto.Price)))
                 {
-                    var detail = await GetSteamAppDetailAsync(client, appId);
+                    var detail = await GetSteamAppDetailAsync(client, appId, lang);
                     if (detail is not null)
                     {
                         if (string.IsNullOrWhiteSpace(dto.Genre)) dto.Genre = detail.Value.Genre;
@@ -1283,9 +1354,12 @@ public class HomeController : Controller
         }
     }
 
-    private static async Task<(string Genre, string Summary, string Price, string Poster)?> GetSteamAppDetailAsync(HttpClient client, int appId)
+    private static async Task<(string Genre, string Summary, string Price, string Poster)?> GetSteamAppDetailAsync(HttpClient client, int appId, string lang)
     {
-        var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l=turkish&cc=tr";
+        var en = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var storeLang = en ? "english" : "turkish";
+        var cc = en ? "us" : "tr";
+        var url = $"https://store.steampowered.com/api/appdetails?appids={appId}&l={storeLang}&cc={cc}";
         try
         {
             await using var stream = await client.GetStreamAsync(url);

@@ -317,36 +317,6 @@ body {
   box-shadow: 0 10px 25px rgba(2, 6, 23, 0.45);
 }
 
-.profile-avatar-cropper {
-  width: 122px;
-  height: 122px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 3px solid #f28c28;
-  box-shadow: 0 10px 25px rgba(2, 6, 23, 0.45);
-}
-
-.profile-avatar-zoomable {
-  transform-origin: center center;
-}
-
-.avatar-adjust-form {
-  width: 100%;
-  max-width: 190px;
-}
-
-.avatar-adjust-grid {
-  display: grid;
-  gap: 0.35rem;
-  font-size: 0.78rem;
-  color: #e5e7eb;
-  text-align: left;
-}
-
-.avatar-adjust-grid input[type='range'] {
-  width: 100%;
-}
-
 .profile-avatar-fallback {
   display: grid;
   place-items: center;

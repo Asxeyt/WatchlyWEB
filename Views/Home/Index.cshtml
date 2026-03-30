@@ -73,14 +73,39 @@
     string PuanEtiketi() => T("Puan", "Score");
     string FiyatEtiketi() => T("Fiyat", "Price");
 
-    string TrGenre(string? v)
+    string LocalizeGenre(string? v)
     {
-        if (string.IsNullOrWhiteSpace(v) || isEnglish)
+        if (string.IsNullOrWhiteSpace(v))
         {
-            return v ?? string.Empty;
+            return string.Empty;
         }
 
-        return v
+        var value = v ?? string.Empty;
+        if (isEnglish)
+        {
+            return value
+                .Replace("Aksiyon", "Action", StringComparison.OrdinalIgnoreCase)
+                .Replace("Macera", "Adventure", StringComparison.OrdinalIgnoreCase)
+                .Replace("Bilim Kurgu", "Science Fiction", StringComparison.OrdinalIgnoreCase)
+                .Replace("Dram", "Drama", StringComparison.OrdinalIgnoreCase)
+                .Replace("Komedi", "Comedy", StringComparison.OrdinalIgnoreCase)
+                .Replace("Romantik", "Romance", StringComparison.OrdinalIgnoreCase)
+                .Replace("Korku", "Horror", StringComparison.OrdinalIgnoreCase)
+                .Replace("Gizem", "Mystery", StringComparison.OrdinalIgnoreCase)
+                .Replace("Gerilim", "Thriller", StringComparison.OrdinalIgnoreCase)
+                .Replace("Fantastik", "Fantasy", StringComparison.OrdinalIgnoreCase)
+                .Replace("Animasyon", "Animation", StringComparison.OrdinalIgnoreCase)
+                .Replace("Suc", "Crime", StringComparison.OrdinalIgnoreCase)
+                .Replace("Aile", "Family", StringComparison.OrdinalIgnoreCase)
+                .Replace("Dogaustu", "Supernatural", StringComparison.OrdinalIgnoreCase)
+                .Replace("RYO", "RPG", StringComparison.OrdinalIgnoreCase)
+                .Replace("Cok Oyunculu", "MMO", StringComparison.OrdinalIgnoreCase)
+                .Replace("Nisanci", "Shooter", StringComparison.OrdinalIgnoreCase)
+                .Replace("Yaris", "Racing", StringComparison.OrdinalIgnoreCase)
+                .Replace("Strateji", "Strategy", StringComparison.OrdinalIgnoreCase);
+        }
+
+        return value
             .Replace("Science Fiction", "Bilim Kurgu", StringComparison.OrdinalIgnoreCase)
             .Replace("Science-Fiction", "Bilim Kurgu", StringComparison.OrdinalIgnoreCase)
             .Replace("Action", "Aksiyon", StringComparison.OrdinalIgnoreCase)
@@ -93,32 +118,36 @@
             .Replace("Thriller", "Gerilim", StringComparison.OrdinalIgnoreCase)
             .Replace("Fantasy", "Fantastik", StringComparison.OrdinalIgnoreCase)
             .Replace("Animation", "Animasyon", StringComparison.OrdinalIgnoreCase)
-            .Replace("Crime", "Suç", StringComparison.OrdinalIgnoreCase)
+            .Replace("Crime", "Suc", StringComparison.OrdinalIgnoreCase)
             .Replace("Family", "Aile", StringComparison.OrdinalIgnoreCase)
-            .Replace("Supernatural", "Doğaüstü", StringComparison.OrdinalIgnoreCase)
+            .Replace("Supernatural", "Dogaustu", StringComparison.OrdinalIgnoreCase)
             .Replace("RPG", "RYO", StringComparison.OrdinalIgnoreCase)
-            .Replace("MMO", "Çok Oyunculu", StringComparison.OrdinalIgnoreCase)
-            .Replace("Shooter", "Nişancı", StringComparison.OrdinalIgnoreCase)
-            .Replace("Racing", "Yarış", StringComparison.OrdinalIgnoreCase)
+            .Replace("MMO", "Cok Oyunculu", StringComparison.OrdinalIgnoreCase)
+            .Replace("Shooter", "Nisanci", StringComparison.OrdinalIgnoreCase)
+            .Replace("Racing", "Yaris", StringComparison.OrdinalIgnoreCase)
             .Replace("Strategy", "Strateji", StringComparison.OrdinalIgnoreCase);
     }
 
-    string TrSummary(string? v)
+    string LocalizeSummary(string? v)
     {
         if (string.IsNullOrWhiteSpace(v))
         {
             return string.Empty;
         }
 
+        var value = v ?? string.Empty;
         if (isEnglish)
         {
-            return v;
+            return value
+                .Replace("Yayin", "Published", StringComparison.OrdinalIgnoreCase)
+                .Replace("Konu yok", "No summary", StringComparison.OrdinalIgnoreCase)
+                .Replace("Bilgi yok", "No data", StringComparison.OrdinalIgnoreCase);
         }
 
-        return v
+        return value
             .Replace("No summary", "Konu yok", StringComparison.OrdinalIgnoreCase)
             .Replace("No data", "Bilgi yok", StringComparison.OrdinalIgnoreCase)
-            .Replace("Published", "Yayın", StringComparison.OrdinalIgnoreCase);
+            .Replace("Published", "Yayin", StringComparison.OrdinalIgnoreCase);
     }
 
     var oyunKategori = Model.SeciliKategori == MedyaKategori.Oyun;
@@ -180,8 +209,8 @@
                                     </div>
                                     <div class="media-item-content">
                                         <h3 class="media-item-title">@Model.RastgeleSecilenDetay.Ad</h3>
-                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Tur) ? BilgiYok() : TrGenre(Model.RastgeleSecilenDetay.Tur))</p>
-                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : TrSummary(Model.RastgeleSecilenDetay.Konu))</p>
+                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Tur) ? BilgiYok() : LocalizeGenre(Model.RastgeleSecilenDetay.Tur))</p>
+                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : LocalizeSummary(Model.RastgeleSecilenDetay.Konu))</p>
                                         @if (oyunKategori)
                                         {
                                             <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Fiyat) ? BilgiYok() : Model.RastgeleSecilenDetay.Fiyat)</p>
@@ -263,8 +292,8 @@
                                         </div>
                                         <div class="media-item-content">
                                             <h3 class="media-item-title">@item.Ad</h3>
-                                            <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : TrGenre(item.Tur))</p>
-                                            <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : TrSummary(item.Konu))</p>
+                                            <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : LocalizeGenre(item.Tur))</p>
+                                            <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : LocalizeSummary(item.Konu))</p>
                                             @if (oyunKategori)
                                             {
                                                 <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Fiyat) ? BilgiYok() : item.Fiyat)</p>
@@ -321,8 +350,8 @@
                                     </div>
                                     <div class="media-item-content">
                                         <h3 class="media-item-title">@item.Ad</h3>
-                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : TrGenre(item.Tur))</p>
-                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : TrSummary(item.Konu))</p>
+                                        <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : LocalizeGenre(item.Tur))</p>
+                                        <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : LocalizeSummary(item.Konu))</p>
                                         @if (oyunKategori)
                                         {
                                             <p class="media-item-line"><strong>@FiyatEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Fiyat) ? BilgiYok() : item.Fiyat)</p>
@@ -476,3 +505,6 @@
 })();
 </script>
 }
+
+
+
