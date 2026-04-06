@@ -16,6 +16,7 @@
         MedyaKategori.Oyun => T("Oyun", "Game"),
         MedyaKategori.CizgiFilm => T("Cizgi Film", "Cartoon"),
         MedyaKategori.CizgiRoman => T("Cizgi Roman", "Comic"),
+        MedyaKategori.Webtoon => "Webtoon",
         _ => k.ToString()
     };
 
@@ -29,6 +30,7 @@
         MedyaKategori.Oyun => "OY",
         MedyaKategori.CizgiFilm => "CF",
         MedyaKategori.CizgiRoman => "CR",
+        MedyaKategori.Webtoon => "WT",
         _ => "--"
     };
 
@@ -40,6 +42,7 @@
         MedyaKategori.Kitap => T("Okudum", "Read"),
         MedyaKategori.Manga => T("Okudum", "Read"),
         MedyaKategori.CizgiRoman => T("Okudum", "Read"),
+        MedyaKategori.Webtoon => T("Okudum", "Read"),
         MedyaKategori.Oyun => T("Oynadim", "Played"),
         _ => T("Izledim", "Watched")
     };
@@ -49,6 +52,7 @@
         MedyaKategori.Kitap => T("Okuduklarim", "Read Items"),
         MedyaKategori.Manga => T("Okuduklarim", "Read Items"),
         MedyaKategori.CizgiRoman => T("Okuduklarim", "Read Items"),
+        MedyaKategori.Webtoon => T("Okuduklarim", "Read Items"),
         MedyaKategori.Oyun => T("Oynadiklarim", "Played Items"),
         _ => T("Izlediklerim", "Watched")
     };
@@ -63,6 +67,7 @@
         MedyaKategori.Oyun => "Elden Ring",
         MedyaKategori.CizgiFilm => "Shrek",
         MedyaKategori.CizgiRoman => "Batman: Year One",
+        MedyaKategori.Webtoon => "Tower of God",
         _ => "Interstellar"
     };
 
@@ -151,7 +156,7 @@
     }
 
     var oyunKategori = Model.SeciliKategori == MedyaKategori.Oyun;
-    var kitapKategori = Model.SeciliKategori == MedyaKategori.Kitap || Model.SeciliKategori == MedyaKategori.CizgiRoman;
+    var kitapKategori = Model.SeciliKategori == MedyaKategori.Kitap || Model.SeciliKategori == MedyaKategori.CizgiRoman || Model.SeciliKategori == MedyaKategori.Webtoon;
     var puanGoster = !oyunKategori && !kitapKategori;
 }
 

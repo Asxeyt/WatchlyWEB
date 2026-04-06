@@ -270,6 +270,7 @@ public class HomeController : Controller
                 MedyaKategori.Oyun => currentLang == "en" ? "No game found." : "Boyle bir oyun yok.",
                 MedyaKategori.CizgiFilm => currentLang == "en" ? "No cartoon found." : "Boyle bir cizgi film yok.",
                 MedyaKategori.CizgiRoman => currentLang == "en" ? "No comic found." : "Boyle bir cizgi roman yok.",
+                MedyaKategori.Webtoon => currentLang == "en" ? "No webtoon found." : "Boyle bir webtoon yok.",
                 _ => currentLang == "en" ? "No result found." : "Sonuc bulunamadi."
             };
 
@@ -428,6 +429,7 @@ public class HomeController : Controller
                 MedyaKategori.Oyun => await SearchSteamAsync(q, lang),
                 MedyaKategori.CizgiFilm => await SearchCartoonsAsync(q, lang),
                 MedyaKategori.CizgiRoman => await SearchBooksAsync(q, comicsOnly: true, lang),
+                MedyaKategori.Webtoon => await SearchBooksAsync(q, comicsOnly: true, lang),
                 _ => new List<CatalogSuggestionViewModel>()
             };
 
@@ -484,7 +486,7 @@ public class HomeController : Controller
             return string.IsNullOrWhiteSpace(row.Fiyat);
         }
 
-        if (row.Kategori == MedyaKategori.Kitap || row.Kategori == MedyaKategori.CizgiRoman)
+        if (row.Kategori == MedyaKategori.Kitap || row.Kategori == MedyaKategori.CizgiRoman || row.Kategori == MedyaKategori.Webtoon)
         {
             return false;
         }
@@ -530,6 +532,7 @@ public class HomeController : Controller
             MedyaKategori.Oyun => await SearchSteamAsync(item.Ad, lang),
             MedyaKategori.CizgiFilm => await SearchCartoonsAsync(item.Ad, lang),
             MedyaKategori.CizgiRoman => await SearchBooksAsync(item.Ad, comicsOnly: true, lang),
+            MedyaKategori.Webtoon => await SearchBooksAsync(item.Ad, comicsOnly: true, lang),
             _ => new List<CatalogSuggestionViewModel>()
         };
 
@@ -566,7 +569,7 @@ public class HomeController : Controller
                 changed = true;
             }
         }
-        else if (item.Kategori != MedyaKategori.Kitap && item.Kategori != MedyaKategori.CizgiRoman)
+        else if (item.Kategori != MedyaKategori.Kitap && item.Kategori != MedyaKategori.CizgiRoman && item.Kategori != MedyaKategori.Webtoon)
         {
             if (string.IsNullOrWhiteSpace(item.Puan) && !string.IsNullOrWhiteSpace(best.Score))
             {

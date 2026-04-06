@@ -9,5 +9,6 @@ public enum MedyaKategori
     Film = 5,
     Oyun = 6,
     CizgiFilm = 7,
-    CizgiRoman = 8
+    CizgiRoman = 8,
+    Webtoon = 9
 }

@@ -18,7 +18,8 @@
         MedyaKategori.Dizi,
         MedyaKategori.Oyun,
         MedyaKategori.CizgiFilm,
-        MedyaKategori.CizgiRoman
+        MedyaKategori.CizgiRoman,
+        MedyaKategori.Webtoon
     };
 
     string KategoriAdi(MedyaKategori k) => k switch
@@ -29,6 +30,7 @@
         MedyaKategori.Oyun => T("OYUN", "GAME"),
         MedyaKategori.CizgiFilm => T("CIZGI FILM", "CARTOON"),
         MedyaKategori.CizgiRoman => T("CIZGI ROMAN", "COMIC"),
+        MedyaKategori.Webtoon => "WEBTOON",
         _ => k.ToString().ToUpperInvariant()
     };
 }
