@@ -92,6 +92,35 @@ public class HomeController : Controller
             return RedirectToAction(nameof(Index), new { lang, kategori = seciliKategori });
         }
 
+        var typedName = form.YeniOgeAdi.Trim();
+        var userSelectedFromList =
+            !string.IsNullOrWhiteSpace(form.YeniOgePosterUrl) ||
+            !string.IsNullOrWhiteSpace(form.YeniOgeTur) ||
+            !string.IsNullOrWhiteSpace(form.YeniOgeKonu) ||
+            !string.IsNullOrWhiteSpace(form.YeniOgePuan) ||
+            !string.IsNullOrWhiteSpace(form.YeniOgeFiyat);
+
+        if (!userSelectedFromList)
+        {
+            var suggestions = await SearchByCategoryAsync(seciliKategori, typedName, lang);
+            var best = suggestions.FirstOrDefault();
+            if (best is null || !IsAcceptableMatch(typedName, best.Name))
+            {
+                TempData["Mesaj"] = lang == "en"
+                    ? "No close result found. Please select from search suggestions."
+                    : "Yakin sonuc bulunamadi. Lutfen arama onerilerinden sec.";
+                TempData["MesajTipi"] = "warning";
+                return RedirectToAction(nameof(Index), new { lang, kategori = seciliKategori });
+            }
+
+            form.YeniOgeAdi = best.Name;
+            form.YeniOgePosterUrl = best.PosterUrl;
+            form.YeniOgeTur = best.Genre;
+            form.YeniOgeKonu = best.Summary;
+            form.YeniOgePuan = best.Score;
+            form.YeniOgeFiyat = best.Price;
+        }
+
         var yeniKayit = new MedyaOgesi
         {
             Ad = form.YeniOgeAdi.Trim(),
@@ -1068,11 +1097,14 @@ public class HomeController : Controller
         var ytsTask = SearchYtsAsync(query);
         var omdbTask = SearchOmdbAsync(query);
         var itunesTask = SearchItunesMoviesAsync(query);
-        await Task.WhenAll(ytsTask, omdbTask, itunesTask);
+        var imdbTask = SearchImdbSuggestionsAsync(query);
+        await Task.WhenAll(ytsTask, omdbTask, itunesTask, imdbTask);
 
         var merged = ytsTask.Result
             .Concat(omdbTask.Result)
             .Concat(itunesTask.Result)
+            .Concat(imdbTask.Result)
+            .Concat(SearchLocalMovies(query))
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
             .ToList();
@@ -1399,6 +1431,68 @@ public class HomeController : Controller
         }
     }
 
+    private async Task<List<CatalogSuggestionViewModel>> SearchImdbSuggestionsAsync(string query)
+    {
+        var q = (query ?? string.Empty).Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(q))
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+
+        var first = char.IsLetterOrDigit(q[0]) ? q[0] : 'a';
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://v2.sg.media-imdb.com/suggestion/{first}/{Uri.EscapeDataString(q)}.json";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("d", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in items.EnumerateArray().Take(20))
+            {
+                var type = item.TryGetProperty("qid", out var qid) ? (qid.GetString() ?? string.Empty) : string.Empty;
+                if (!string.Equals(type, "movie", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(type, "feature", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                var title = item.TryGetProperty("l", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var year = item.TryGetProperty("y", out var y) && y.ValueKind == JsonValueKind.Number ? y.GetInt32().ToString() : string.Empty;
+                var poster = item.TryGetProperty("i", out var iObj) && iObj.TryGetProperty("imageUrl", out var iu)
+                    ? (iu.GetString() ?? string.Empty)
+                    : string.Empty;
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = year,
+                    Genre = string.Empty,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
+                    Summary = string.Empty,
+                    Score = string.Empty,
+                    Price = string.Empty
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
     private async Task<List<CatalogSuggestionViewModel>> SearchSteamCommunityAppsAsync(string query, string lang)
     {
         var client = _httpClientFactory.CreateClient();
@@ -1473,7 +1567,25 @@ public class HomeController : Controller
             new() { Name = "SpongeBob SquarePants", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Bikini Bottom'da gecen komik maceralar." : "Funny adventures in Bikini Bottom.", Score = "8.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/81/202627.jpg" },
             new() { Name = "Henry Danger", Genre = tr ? "Aile, Komedi, Cocuk" : "Family, Comedy, Kids", Summary = tr ? "Kaptan Man'in yardimcisi olan Henry'nin maceralari." : "Henry's adventures as Captain Man's sidekick.", Score = "5.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/1/2605.jpg" },
             new() { Name = "Tom and Jerry", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Kedi-fare kovalamacasi klasik serisi." : "Classic cat-and-mouse chase series.", Score = "8.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/f6/TomandJerryTitleCardc.jpg" },
-            new() { Name = "Scooby-Doo", Genre = tr ? "Animasyon, Gizem" : "Animation, Mystery", Summary = tr ? "Scooby ve ekibi gizemleri cozer." : "Scooby and team solve mysteries.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/5/53/Scooby-Doo%21_Mystery_Incorporated_title_card.png" }
+            new() { Name = "Scooby-Doo", Genre = tr ? "Animasyon, Gizem" : "Animation, Mystery", Summary = tr ? "Scooby ve ekibi gizemleri cozer." : "Scooby and team solve mysteries.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/5/53/Scooby-Doo%21_Mystery_Incorporated_title_card.png" },
+            new() { Name = "Puss in Boots", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "DreamWorks'un Cizmeli Kedi macerasi." : "DreamWorks' Puss in Boots adventure.", Score = "7.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/6/6d/Puss_in_Boots_2011_poster.jpg" },
+            new() { Name = "Frozen", Genre = tr ? "Animasyon, Muzikal" : "Animation, Musical", Summary = tr ? "Disney prensesleri Elsa ve Anna'nin hikayesi." : "Disney princess story of Elsa and Anna.", Score = "7.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/05/Frozen_%282013_film%29_poster.jpg" },
+            new() { Name = "Bolt", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Disney'in Bolt animasyon filmi." : "Disney's Bolt animated film.", Score = "6.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/4/44/Bolt_poster.jpg" },
+            new() { Name = "Toy Story", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Pixar'in oyuncaklar dunyasi." : "Pixar's world of toys.", Score = "8.3", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/1/13/Toy_Story.jpg" },
+            new() { Name = "Kung Fu Panda", Genre = tr ? "Animasyon, Aksiyon" : "Animation, Action", Summary = tr ? "DreamWorks'ten Po'nun efsane yolculugu." : "Po's legendary journey from DreamWorks.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/7/76/Kungfupanda.jpg" },
+            new() { Name = "Adventure Time", Genre = tr ? "Animasyon, Fantastik" : "Animation, Fantasy", Summary = tr ? "Cartoon Network klasiği." : "A Cartoon Network classic.", Score = "8.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/96/Adventure_Time_-_Title_card.png" }
+        };
+        return RankFuzzy(query, local);
+    }
+
+    private static List<CatalogSuggestionViewModel> SearchLocalMovies(string query)
+    {
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "The Godfather", Genre = "Crime, Drama", Summary = "The aging patriarch of an organized crime dynasty transfers control to his reluctant son.", Score = "9.2", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/1/1c/Godfather_ver1.jpg" },
+            new() { Name = "Interstellar", Genre = "Adventure, Drama, Sci-Fi", Summary = "A team of explorers travel through a wormhole in space.", Score = "8.7", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/b/bc/Interstellar_film_poster.jpg" },
+            new() { Name = "The Dark Knight", Genre = "Action, Crime, Drama", Summary = "Batman faces the Joker in Gotham.", Score = "9.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/8/8a/Dark_Knight.jpg" },
+            new() { Name = "Inception", Genre = "Action, Sci-Fi, Thriller", Summary = "A thief steals information by infiltrating dreams.", Score = "8.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/7/7f/Inception_ver3.jpg" }
         };
         return RankFuzzy(query, local);
     }
@@ -1721,6 +1833,35 @@ public class HomeController : Controller
         var dist = LevenshteinDistance(a, b);
         var maxLen = Math.Max(a.Length, b.Length);
         return maxLen == 0 ? 1 : 1 - (double)dist / maxLen;
+    }
+
+    private static bool IsAcceptableMatch(string input, string candidate)
+    {
+        static string N(string v) =>
+            new((v ?? string.Empty)
+                .Trim()
+                .ToLowerInvariant()
+                .Where(ch => char.IsLetterOrDigit(ch) || char.IsWhiteSpace(ch))
+                .ToArray());
+
+        var a = N(input);
+        var b = N(candidate);
+        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b))
+        {
+            return false;
+        }
+
+        if (a == b)
+        {
+            return true;
+        }
+
+        if (b.Contains(a, StringComparison.Ordinal) || a.Contains(b, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        return Similarity(a, b) >= 0.45;
     }
 
     private static int LevenshteinDistance(string s, string t)
