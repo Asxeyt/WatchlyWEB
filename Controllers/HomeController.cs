@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Security.Claims;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using KategoriSecici.Data;
@@ -13,6 +14,7 @@ namespace KategoriSecici.Controllers;
 
 public class HomeController : Controller
 {
+    private static readonly ConcurrentDictionary<string, string> TranslationCache = new(StringComparer.Ordinal);
     private readonly ILogger<HomeController> _logger;
     private readonly AppDbContext _dbContext;
     private readonly IHttpClientFactory _httpClientFactory;
@@ -239,12 +241,12 @@ public class HomeController : Controller
             return Unauthorized();
         }
 
-        if (query.Length < 2)
+        if (query.Length < 1)
         {
             return Json(new
             {
                 items = Array.Empty<CatalogSuggestionViewModel>(),
-                message = currentLang == "en" ? "Type at least 2 characters." : "En az 2 karakter yaz."
+                message = currentLang == "en" ? "Type at least 1 character." : "En az 1 karakter yaz."
             });
         }
 
@@ -312,9 +314,16 @@ public class HomeController : Controller
         await EnrichMissingMetadataInCategoryAsync(seciliKategori, userId, currentLang);
 
         var seciliListe = await _dbContext.MedyaOgeleri
+            .AsNoTracking()
             .Where(x => x.Kategori == seciliKategori && x.AppUserId == userId)
             .OrderBy(x => x.Ad)
             .ToListAsync();
+
+        foreach (var item in seciliListe)
+        {
+            item.Tur = await TranslateIfNeededAsync(item.Tur, currentLang);
+            item.Konu = await TranslateIfNeededAsync(item.Konu, currentLang);
+        }
 
         var adetler = await _dbContext.MedyaOgeleri
             .Where(x => x.AppUserId == userId)
@@ -417,7 +426,8 @@ public class HomeController : Controller
     private async Task<List<CatalogSuggestionViewModel>> SearchByCategoryAsync(MedyaKategori kategori, string query, string lang)
     {
         var all = new List<CatalogSuggestionViewModel>();
-        foreach (var q in BuildQueryVariants(query))
+        var variants = BuildQueryVariants(query).Take(query.Trim().Length <= 2 ? 1 : 2);
+        foreach (var q in variants)
         {
             List<CatalogSuggestionViewModel> part = kategori switch
             {
@@ -428,8 +438,8 @@ public class HomeController : Controller
                 MedyaKategori.Film => await SearchMoviesAsync(q),
                 MedyaKategori.Oyun => await SearchSteamAsync(q, lang),
                 MedyaKategori.CizgiFilm => await SearchCartoonsAsync(q, lang),
-                MedyaKategori.CizgiRoman => await SearchBooksAsync(q, comicsOnly: true, lang),
-                MedyaKategori.Webtoon => await SearchBooksAsync(q, comicsOnly: true, lang),
+                MedyaKategori.CizgiRoman => await SearchComicsAsync(q, lang),
+                MedyaKategori.Webtoon => await SearchWebtoonAsync(q, lang),
                 _ => new List<CatalogSuggestionViewModel>()
             };
 
@@ -440,10 +450,11 @@ public class HomeController : Controller
             }
         }
 
-        return RankFuzzy(query, all)
+        var ranked = RankFuzzy(query, all)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
             .ToList();
+        return await LocalizeCatalogItemsAsync(ranked, lang);
     }
 
     private static IEnumerable<string> BuildQueryVariants(string query)
@@ -531,8 +542,8 @@ public class HomeController : Controller
             MedyaKategori.Film => await SearchMoviesAsync(item.Ad),
             MedyaKategori.Oyun => await SearchSteamAsync(item.Ad, lang),
             MedyaKategori.CizgiFilm => await SearchCartoonsAsync(item.Ad, lang),
-            MedyaKategori.CizgiRoman => await SearchBooksAsync(item.Ad, comicsOnly: true, lang),
-            MedyaKategori.Webtoon => await SearchBooksAsync(item.Ad, comicsOnly: true, lang),
+            MedyaKategori.CizgiRoman => await SearchComicsAsync(item.Ad, lang),
+            MedyaKategori.Webtoon => await SearchWebtoonAsync(item.Ad, lang),
             _ => new List<CatalogSuggestionViewModel>()
         };
 
@@ -551,13 +562,13 @@ public class HomeController : Controller
 
         if (string.IsNullOrWhiteSpace(item.Tur) && !string.IsNullOrWhiteSpace(best.Genre))
         {
-            item.Tur = CleanValue(best.Genre, 240);
+            item.Tur = CleanValue(await TranslateIfNeededAsync(best.Genre, lang), 240);
             changed = true;
         }
 
         if (string.IsNullOrWhiteSpace(item.Konu) && !string.IsNullOrWhiteSpace(best.Summary))
         {
-            item.Konu = CleanValue(best.Summary, 3000);
+            item.Konu = CleanValue(await TranslateIfNeededAsync(best.Summary, lang), 3000);
             changed = true;
         }
 
@@ -754,7 +765,11 @@ public class HomeController : Controller
                 .Where(x =>
                     (x.Genre ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
                     (x.Genre ?? string.Empty).Contains("graphic", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Genre ?? string.Empty).Contains("manga", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Genre ?? string.Empty).Contains("manhwa", StringComparison.OrdinalIgnoreCase) ||
                     (x.Name ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Name ?? string.Empty).Contains("webtoon", StringComparison.OrdinalIgnoreCase) ||
+                    (x.Name ?? string.Empty).Contains("batman", StringComparison.OrdinalIgnoreCase) ||
                     (x.Summary ?? string.Empty).Contains("comic", StringComparison.OrdinalIgnoreCase))
                 .ToList();
             if (filtered.Count > 0)
@@ -770,9 +785,8 @@ public class HomeController : Controller
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
-        var q = comicsOnly ? $"{query} comic graphic novel" : query;
-        var langRestrict = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
-        var url = $"https://www.googleapis.com/books/v1/volumes?q={Uri.EscapeDataString(q)}&maxResults=20&langRestrict={langRestrict}";
+        var q = comicsOnly ? $"{query} comic graphic novel manga manhwa webtoon" : query;
+        var url = $"https://www.googleapis.com/books/v1/volumes?q={Uri.EscapeDataString(q)}&maxResults=20";
         try
         {
             await using var stream = await client.GetStreamAsync(url);
@@ -810,9 +824,14 @@ public class HomeController : Controller
 
                 var summary = vi.TryGetProperty("description", out var d) ? (d.GetString() ?? string.Empty) : string.Empty;
                 var poster = string.Empty;
-                if (vi.TryGetProperty("imageLinks", out var il) && il.TryGetProperty("thumbnail", out var th))
+                if (vi.TryGetProperty("imageLinks", out var il) &&
+                    (il.TryGetProperty("thumbnail", out var th) || il.TryGetProperty("smallThumbnail", out th)))
                 {
                     poster = th.GetString() ?? string.Empty;
+                }
+                if (!string.IsNullOrWhiteSpace(poster))
+                {
+                    poster = poster.Replace("http://", "https://", StringComparison.OrdinalIgnoreCase);
                 }
 
                 list.Add(new CatalogSuggestionViewModel
@@ -837,10 +856,13 @@ public class HomeController : Controller
 
     private async Task<List<CatalogSuggestionViewModel>> SearchCartoonsAsync(string query, string lang)
     {
-        var tv = await SearchTvMazeAsync($"{query} animation");
-        var movies = await SearchMoviesAsync($"{query} animation");
+        var tv = await SearchTvMazeAsync(query);
+        var tvAnimation = await SearchTvMazeAsync($"{query} animation");
+        var movies = await SearchMoviesAsync(query);
+        var moviesAnimation = await SearchMoviesAsync($"{query} animation");
+        var local = SearchLocalCartoons(query, lang);
 
-        var merged = tv.Concat(movies)
+        var merged = tv.Concat(tvAnimation).Concat(movies).Concat(moviesAnimation).Concat(local)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
             .ToList();
@@ -848,9 +870,14 @@ public class HomeController : Controller
         var filtered = merged
             .Where(x =>
                 (x.Genre ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
+                (x.Genre ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase) ||
                 (x.Summary ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase) ||
-                (x.Name ?? string.Empty).Contains("anime", StringComparison.OrdinalIgnoreCase))
+                (x.Name ?? string.Empty).Contains("anime", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("sponge", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("henry", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("tom", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("jerry", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         return RankFuzzy(query, filtered.Count > 0 ? filtered : merged);
@@ -905,11 +932,12 @@ public class HomeController : Controller
                         summary = fs[0].GetString() ?? string.Empty;
                     }
                 }
-                if (string.IsNullOrWhiteSpace(summary) && !string.IsNullOrWhiteSpace(year))
+                if (!string.IsNullOrWhiteSpace(year))
                 {
-                    summary = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase)
+                    var pub = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase)
                         ? $"Published: {year}"
                         : $"Yayin: {year}";
+                    summary = string.IsNullOrWhiteSpace(summary) ? pub : $"{summary}\n{pub}";
                 }
 
                 var cover = string.Empty;
@@ -1037,19 +1065,19 @@ public class HomeController : Controller
             return await SearchYtsPopularAsync();
         }
 
-        var fromYts = await SearchYtsAsync(query);
-        if (fromYts.Count > 0)
-        {
-            return fromYts;
-        }
+        var ytsTask = SearchYtsAsync(query);
+        var omdbTask = SearchOmdbAsync(query);
+        var itunesTask = SearchItunesMoviesAsync(query);
+        await Task.WhenAll(ytsTask, omdbTask, itunesTask);
 
-        var fromOmdb = await SearchOmdbAsync(query);
-        if (fromOmdb.Count > 0)
-        {
-            return fromOmdb;
-        }
+        var merged = ytsTask.Result
+            .Concat(omdbTask.Result)
+            .Concat(itunesTask.Result)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
 
-        return await SearchItunesMoviesAsync(query);
+        return RankFuzzy(query, merged);
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchYtsPopularAsync()
@@ -1287,7 +1315,7 @@ public class HomeController : Controller
             using var doc = await JsonDocument.ParseAsync(stream);
             if (!doc.RootElement.TryGetProperty("items", out var items) || items.ValueKind != JsonValueKind.Array)
             {
-                return new List<CatalogSuggestionViewModel>();
+                return await SearchSteamCommunityAppsAsync(query, lang);
             }
 
             var list = new List<CatalogSuggestionViewModel>();
@@ -1310,6 +1338,10 @@ public class HomeController : Controller
                     price = en
                         ? $"${finalPrice.GetInt32() / 100.0:0.00}"
                         : $"?{finalPrice.GetInt32() / 100.0:0.00}";
+                }
+                else if (item.TryGetProperty("is_free", out var isFree) && isFree.ValueKind == JsonValueKind.True)
+                {
+                    price = en ? "Free" : "Ucretsiz";
                 }
                 var score = string.Empty;
                 if (item.TryGetProperty("review_score", out var rv) && rv.ValueKind == JsonValueKind.Number)
@@ -1349,11 +1381,288 @@ public class HomeController : Controller
                 list.Add(dto);
             }
 
+            if (list.Count == 0)
+            {
+                return await SearchSteamCommunityAppsAsync(query, lang);
+            }
+
+            var fallback = await SearchSteamCommunityAppsAsync(query, lang);
+            var merged = list.Concat(fallback)
+                .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+            return RankFuzzy(query, merged);
+        }
+        catch
+        {
+            return await SearchSteamCommunityAppsAsync(query, lang);
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchSteamCommunityAppsAsync(string query, string lang)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var en = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var url = $"https://steamcommunity.com/actions/SearchApps/{Uri.EscapeDataString(query)}";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array)
+            {
+                return SearchLocalGames(query, lang);
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in doc.RootElement.EnumerateArray().Take(20))
+            {
+                var title = item.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var appId = item.TryGetProperty("appid", out var idEl) && idEl.ValueKind == JsonValueKind.Number
+                    ? idEl.GetInt32()
+                    : 0;
+
+                var dto = new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    Genre = string.Empty,
+                    PosterUrl = string.Empty,
+                    Summary = string.Empty,
+                    Score = string.Empty,
+                    Price = string.Empty
+                };
+
+                if (appId > 0)
+                {
+                    var detail = await GetSteamAppDetailAsync(client, appId, lang);
+                    if (detail is not null)
+                    {
+                        dto.Genre = detail.Value.Genre;
+                        dto.Summary = detail.Value.Summary;
+                        dto.Price = string.IsNullOrWhiteSpace(detail.Value.Price) ? (en ? "Free" : "Ucretsiz") : detail.Value.Price;
+                        dto.PosterUrl = detail.Value.Poster;
+                    }
+                }
+
+                list.Add(dto);
+            }
+
+            var merged = list.Concat(SearchLocalGames(query, lang))
+                .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
+
+            return RankFuzzy(query, merged);
+        }
+        catch
+        {
+            return SearchLocalGames(query, lang);
+        }
+    }
+
+    private static List<CatalogSuggestionViewModel> SearchLocalCartoons(string query, string lang)
+    {
+        var tr = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "SpongeBob SquarePants", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Bikini Bottom'da gecen komik maceralar." : "Funny adventures in Bikini Bottom.", Score = "8.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/81/202627.jpg" },
+            new() { Name = "Henry Danger", Genre = tr ? "Aile, Komedi, Cocuk" : "Family, Comedy, Kids", Summary = tr ? "Kaptan Man'in yardimcisi olan Henry'nin maceralari." : "Henry's adventures as Captain Man's sidekick.", Score = "5.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/1/2605.jpg" },
+            new() { Name = "Tom and Jerry", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Kedi-fare kovalamacasi klasik serisi." : "Classic cat-and-mouse chase series.", Score = "8.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/f6/TomandJerryTitleCardc.jpg" },
+            new() { Name = "Scooby-Doo", Genre = tr ? "Animasyon, Gizem" : "Animation, Mystery", Summary = tr ? "Scooby ve ekibi gizemleri cozer." : "Scooby and team solve mysteries.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/5/53/Scooby-Doo%21_Mystery_Incorporated_title_card.png" }
+        };
+        return RankFuzzy(query, local);
+    }
+
+    private static List<CatalogSuggestionViewModel> SearchLocalGames(string query, string lang)
+    {
+        var tr = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "Zula", Genre = tr ? "Aksiyon, Nisanci" : "Action, Shooter", Summary = tr ? "Turk yapimi rekabetci FPS oyunu." : "A competitive FPS game.", Price = tr ? "Ucretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/513710/header.jpg" },
+            new() { Name = "Apex Legends", Genre = tr ? "Aksiyon, Battle Royale" : "Action, Battle Royale", Summary = tr ? "Takim tabanli battle royale nişanci oyunu." : "Squad-based battle royale shooter.", Price = tr ? "Ucretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/header.jpg" }
+        };
+        return RankFuzzy(query, local);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchComicsAsync(string query, string lang)
+    {
+        var google = await SearchGoogleBooksAsync($"{query} comic graphic novel dc marvel", comicsOnly: true, lang);
+        var open = await SearchOpenLibraryAsync($"{query} comic", lang);
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "Batman: Year One", Genre = "Comic, Superhero", Summary = "Bruce Wayne'in Batman olarak ilk donemi.", PosterUrl = "https://covers.openlibrary.org/b/isbn/9781401207526-M.jpg", Score = string.Empty },
+            new() { Name = "The Killing Joke", Genre = "Comic, Superhero", Summary = "Batman ve Joker'in karanlik hikayesi.", PosterUrl = "https://covers.openlibrary.org/b/isbn/9781401216672-M.jpg", Score = string.Empty }
+        };
+
+        var merged = google.Concat(open).Concat(local)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+        return RankFuzzy(query, merged);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchWebtoonAsync(string query, string lang)
+    {
+        var kitsu = await SearchKitsuMangaAsync(query);
+        var jikan = await SearchJikanAsync(query, anime: false);
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "Solo Leveling", Genre = "Webtoon, Action, Fantasy", Summary = "Zayif bir avcinin guclenme hikayesi.", Score = "8.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/99/Solo_Leveling_Webtoon.png" },
+            new() { Name = "Tower of God", Genre = "Webtoon, Adventure, Fantasy", Summary = "Kulenin zirvesine cikmak isteyenlerin hikayesi.", Score = "8.5", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/thumb/7/7e/Tower_of_God_%28manhwa%29.jpg/330px-Tower_of_God_%28manhwa%29.jpg" },
+            new() { Name = "The God of High School", Genre = "Webtoon, Action", Summary = "Turnuvada mucadele eden genc dovusculer.", Score = "7.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/35/The_God_of_High_School.jpg" }
+        };
+
+        var merged = kitsu.Concat(jikan).Concat(local)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+        return RankFuzzy(query, merged);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchKitsuMangaAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://kitsu.io/api/edge/manga?filter[text]={Uri.EscapeDataString(query)}&page[limit]=20";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var items) || items.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var row in items.EnumerateArray())
+            {
+                if (!row.TryGetProperty("attributes", out var at))
+                {
+                    continue;
+                }
+
+                var title = at.TryGetProperty("canonicalTitle", out var ct) ? (ct.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var synopsis = at.TryGetProperty("synopsis", out var sy) ? (sy.GetString() ?? string.Empty) : string.Empty;
+                var subtype = at.TryGetProperty("subtype", out var st) ? (st.GetString() ?? string.Empty) : string.Empty;
+                var score = at.TryGetProperty("averageRating", out var ar) ? (ar.GetString() ?? string.Empty) : string.Empty;
+                var poster = string.Empty;
+                if (at.TryGetProperty("posterImage", out var pi) && pi.TryGetProperty("small", out var small))
+                {
+                    poster = small.GetString() ?? string.Empty;
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    Genre = string.IsNullOrWhiteSpace(subtype) ? "Webtoon" : $"Webtoon, {subtype}",
+                    Summary = synopsis,
+                    Score = score,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty
+                });
+            }
+
             return RankFuzzy(query, list);
         }
         catch
         {
             return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> LocalizeCatalogItemsAsync(List<CatalogSuggestionViewModel> items, string lang)
+    {
+        if (items.Count == 0)
+        {
+            return items;
+        }
+
+        foreach (var item in items.Take(8))
+        {
+            item.Genre = await TranslateIfNeededAsync(item.Genre, lang);
+            item.Summary = await TranslateIfNeededAsync(item.Summary, lang);
+        }
+
+        return items;
+    }
+
+    private async Task<string> TranslateIfNeededAsync(string? text, string targetLang)
+    {
+        var value = (text ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        var lang = NormalizeLang(targetLang);
+        var hasTurkishChars = value.IndexOfAny(new[] { 'ç', 'ğ', 'ı', 'ö', 'ş', 'ü', 'Ç', 'Ğ', 'İ', 'Ö', 'Ş', 'Ü' }) >= 0;
+
+        if (lang == "tr" && hasTurkishChars)
+        {
+            return value;
+        }
+
+        if (lang == "en" && !hasTurkishChars)
+        {
+            return value;
+        }
+
+        var cacheKey = $"{lang}|{value}";
+        if (TranslationCache.TryGetValue(cacheKey, out var cached))
+        {
+            return cached;
+        }
+
+        try
+        {
+            var client = _httpClientFactory.CreateClient();
+            client.Timeout = TimeSpan.FromSeconds(5);
+            var url = $"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl={lang}&dt=t&q={Uri.EscapeDataString(value)}";
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
+            {
+                return value;
+            }
+
+            var sb = new List<string>();
+            var chunks = doc.RootElement[0];
+            if (chunks.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var ch in chunks.EnumerateArray())
+                {
+                    if (ch.ValueKind == JsonValueKind.Array && ch.GetArrayLength() > 0)
+                    {
+                        var part = ch[0].GetString();
+                        if (!string.IsNullOrWhiteSpace(part))
+                        {
+                            sb.Add(part);
+                        }
+                    }
+                }
+            }
+
+            var translated = string.Join(string.Empty, sb).Trim();
+            if (string.IsNullOrWhiteSpace(translated))
+            {
+                return value;
+            }
+
+            TranslationCache[cacheKey] = translated;
+            return translated;
+        }
+        catch
+        {
+            return value;
         }
     }
 

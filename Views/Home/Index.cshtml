@@ -483,7 +483,7 @@
   input.addEventListener('input', () => {
     clearSelectedMeta();
     const q = input.value.trim();
-    if (q.length < 2) {
+    if (q.length < 1) {
       hideResults();
       return;
     }
@@ -499,7 +499,7 @@
         if (currentReq !== reqId) return;
         renderItems(data);
       } catch (_) {}
-    }, 260);
+    }, 120);
   });
 
   document.addEventListener('click', (e) => {
