@@ -19,6 +19,7 @@
 
     bool oyun = Model.Kategori == MedyaKategori.Oyun;
     bool kitap = Model.Kategori == MedyaKategori.Kitap || Model.Kategori == MedyaKategori.CizgiRoman || Model.Kategori == MedyaKategori.Webtoon;
+    bool oyuncuGoster = !oyun && !kitap;
     string doneText = Model.Kategori switch
     {
         MedyaKategori.Oyun => T("Oynadim", "Played"),
@@ -101,6 +102,25 @@
                 }
             </div>
 
+            @if (!string.IsNullOrWhiteSpace(Model.FragmanEmbedUrl))
+            {
+                <div class="media-detail-trailer">
+                    <h2>@T("Fragman", "Trailer")</h2>
+                    @if (Model.FragmanDogrudanVideo)
+                    {
+                        <video controls preload="metadata" src="@Model.FragmanEmbedUrl"></video>
+                    }
+                    else
+                    {
+                        <iframe src="@Model.FragmanEmbedUrl"
+                                title="Trailer"
+                                loading="lazy"
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                allowfullscreen></iframe>
+                    }
+                </div>
+            }
+
             <div class="media-detail-meta">
                 <div><strong>@T("Tur", "Genre"):</strong> @(string.IsNullOrWhiteSpace(Model.Tur) ? T("Bilgi yok", "No data") : Model.Tur)</div>
                 @if (oyun)
@@ -113,7 +133,10 @@
                 }
                 <div><strong>@T("Yayin Tarihi", "Release Date"):</strong> @(string.IsNullOrWhiteSpace(Model.YayinTarihi) ? T("Bilgi yok", "No data") : Model.YayinTarihi)</div>
                 <div><strong>@T("Yapimci", "Producer/Studio"):</strong> @(string.IsNullOrWhiteSpace(Model.Yapimci) ? T("Bilgi yok", "No data") : Model.Yapimci)</div>
-                <div><strong>@T("Oyuncular", "Cast"):</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
+                @if (oyuncuGoster)
+                {
+                    <div><strong>@T("Oyuncular", "Cast"):</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
+                }
             </div>
 
             <div class="media-detail-summary">
@@ -122,6 +145,47 @@
             </div>
         </div>
     </div>
+
+    @if (Model.Gorseller.Count > 0)
+    {
+        <div class="media-detail-similar">
+            <h2>@T("Gorseller", "Photos")</h2>
+            <div class="media-gallery-grid">
+                @foreach (var g in Model.Gorseller.Take(10))
+                {
+                    <a href="@g" target="_blank" rel="noopener noreferrer" class="media-gallery-item">
+                        <img src="@g" alt="@Model.Ad" loading="lazy" />
+                    </a>
+                }
+            </div>
+        </div>
+    }
+
+    @if (oyuncuGoster && Model.OyuncuKartlari.Count > 0)
+    {
+        <div class="media-detail-similar">
+            <h2>@T("Oyuncu Kadrosu", "Cast")</h2>
+            <div class="media-cast-grid">
+                @foreach (var p in Model.OyuncuKartlari)
+                {
+                    <div class="media-cast-card">
+                        @if (!string.IsNullOrWhiteSpace(p.FotografUrl))
+                        {
+                            <img src="@p.FotografUrl" alt="@p.Ad" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="media-detail-no-poster small">@T("Fotograf yok", "No photo")</div>
+                        }
+                        <div class="media-cast-body">
+                            <strong>@p.Ad</strong>
+                            <span>@p.Rol</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 
     <div class="media-detail-similar">
         <h2>@T("Bunu Sevenler Bunlari da Seviyor", "You may also like")</h2>
@@ -157,4 +221,3 @@
         }
     </div>
 </div>
-

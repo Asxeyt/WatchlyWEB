@@ -384,25 +384,30 @@ public class HomeController : Controller
 
         var suggestions = await SearchByCategoryAsync(kategori, name, lang);
         var best = suggestions.FirstOrDefault() ?? new CatalogSuggestionViewModel { Name = name };
+        var extras = await FetchDetailExtrasAsync(kategori, name, lang);
 
         var movieLike = kategori == MedyaKategori.Film || kategori == MedyaKategori.Dizi || kategori == MedyaKategori.CizgiFilm;
-        var trailer = !string.IsNullOrWhiteSpace(best.TrailerUrl)
-            ? best.TrailerUrl
-            : $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(name + " trailer")}";
+        var trailer = FirstNonEmpty(extras.TrailerUrl, best.TrailerUrl, $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(name + " trailer")}");
+        var trailerEmbed = ToEmbedUrl(trailer);
+        var isDirectVideo = IsDirectVideo(trailerEmbed);
 
         var genre = row?.Tur;
         if (string.IsNullOrWhiteSpace(genre))
         {
-            genre = best.Genre;
+            genre = FirstNonEmpty(best.Genre, extras.Genre);
         }
         genre = await TranslateIfNeededAsync(genre, lang);
 
         var summary = row?.Konu;
         if (string.IsNullOrWhiteSpace(summary))
         {
-            summary = best.Summary;
+            summary = FirstNonEmpty(best.Summary, extras.Summary);
         }
         summary = await TranslateIfNeededAsync(summary, lang);
+
+        var release = FirstNonEmpty(best.ReleaseDate, extras.ReleaseDate);
+        var creator = await TranslateIfNeededAsync(FirstNonEmpty(best.Creator, extras.Creator), lang);
+        var castText = await TranslateIfNeededAsync(FirstNonEmpty(best.Cast, extras.Cast), lang);
 
         var model = new MedyaDetayViewModel
         {
@@ -417,10 +422,14 @@ public class HomeController : Controller
             Konu = summary ?? string.Empty,
             Puan = row?.Puan ?? best.Score,
             Fiyat = row?.Fiyat ?? best.Price,
-            YayinTarihi = best.ReleaseDate,
-            Oyuncular = await TranslateIfNeededAsync(best.Cast, lang),
-            Yapimci = await TranslateIfNeededAsync(best.Creator, lang),
-            FragmanUrl = trailer
+            YayinTarihi = release ?? string.Empty,
+            Oyuncular = castText ?? string.Empty,
+            Yapimci = creator ?? string.Empty,
+            FragmanUrl = trailer,
+            FragmanEmbedUrl = trailerEmbed,
+            FragmanDogrudanVideo = isDirectVideo,
+            Gorseller = extras.Images,
+            OyuncuKartlari = extras.CastCards
         };
 
         if (!movieLike && string.IsNullOrWhiteSpace(model.FragmanUrl))
@@ -428,8 +437,7 @@ public class HomeController : Controller
             model.FragmanUrl = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(model.Ad + " trailer")}";
         }
 
-        var similarQuery = BuildSimilarQuery(model.Ad);
-        var benzer = await SearchByCategoryAsync(kategori, similarQuery, lang);
+        var benzer = await BuildSimilarSuggestionsAsync(kategori, model.Ad, model.Tur, lang);
         model.BenzerIcerikler = benzer
             .Where(x => !string.Equals(x.Name, model.Ad, StringComparison.OrdinalIgnoreCase))
             .Take(8)
@@ -453,6 +461,486 @@ public class HomeController : Controller
         }
 
         return string.Join(' ', words.Take(2));
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> BuildSimilarSuggestionsAsync(MedyaKategori kategori, string name, string? genre, string lang)
+    {
+        var genreToken = (genre ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+
+        if (!string.IsNullOrWhiteSpace(genreToken))
+        {
+            var byGenre = await SearchByCategoryAsync(kategori, genreToken, lang);
+            if (byGenre.Count > 0)
+            {
+                return byGenre;
+            }
+        }
+
+        return await SearchByCategoryAsync(kategori, BuildSimilarQuery(name), lang);
+    }
+
+    private async Task<DetailExtras> FetchDetailExtrasAsync(MedyaKategori kategori, string name, string lang)
+    {
+        return kategori switch
+        {
+            MedyaKategori.Film => await FetchMovieExtrasAsync(name),
+            MedyaKategori.Dizi => await FetchTvExtrasAsync(name, lang),
+            MedyaKategori.CizgiFilm => await FetchTvExtrasAsync(name, lang),
+            MedyaKategori.Oyun => await FetchGameExtrasAsync(name, lang),
+            MedyaKategori.Anime => await FetchAnimeExtrasAsync(name),
+            _ => new DetailExtras()
+        };
+    }
+
+    private async Task<DetailExtras> FetchMovieExtrasAsync(string name)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://yts.mx/api/v2/list_movies.json?query_term={Uri.EscapeDataString(name)}&limit=1";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("movies", out var movies) ||
+                movies.ValueKind != JsonValueKind.Array ||
+                movies.GetArrayLength() == 0)
+            {
+                return new DetailExtras();
+            }
+
+            var movie = movies[0];
+            if (!movie.TryGetProperty("id", out var idEl) || idEl.ValueKind != JsonValueKind.Number)
+            {
+                return new DetailExtras();
+            }
+
+            var movieId = idEl.GetInt32();
+            var detailsUrl = $"https://yts.mx/api/v2/movie_details.json?movie_id={movieId}&with_images=true&with_cast=true";
+            await using var detailStream = await client.GetStreamAsync(detailsUrl);
+            using var detailDoc = await JsonDocument.ParseAsync(detailStream);
+            if (!detailDoc.RootElement.TryGetProperty("data", out var d2) ||
+                !d2.TryGetProperty("movie", out var m))
+            {
+                return new DetailExtras();
+            }
+
+            var extras = new DetailExtras
+            {
+                Summary = m.TryGetProperty("description_full", out var ds) ? (ds.GetString() ?? string.Empty) : string.Empty,
+                ReleaseDate = m.TryGetProperty("year", out var y) && y.ValueKind == JsonValueKind.Number ? y.GetInt32().ToString() : string.Empty,
+                Creator = "YTS",
+                Genre = m.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                    ? string.Join(", ", gs.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)).Take(3))
+                    : string.Empty
+            };
+
+            if (m.TryGetProperty("yt_trailer_code", out var yt))
+            {
+                var code = yt.GetString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(code))
+                {
+                    extras.TrailerUrl = $"https://www.youtube.com/watch?v={code}";
+                }
+            }
+
+            foreach (var key in new[] { "medium_screenshot_image1", "medium_screenshot_image2", "medium_screenshot_image3" })
+            {
+                if (m.TryGetProperty(key, out var img))
+                {
+                    var u = NormalizePosterUrl(img.GetString());
+                    if (!string.IsNullOrWhiteSpace(u))
+                    {
+                        extras.Images.Add(u);
+                    }
+                }
+            }
+
+            if (m.TryGetProperty("cast", out var cast) && cast.ValueKind == JsonValueKind.Array)
+            {
+                var cards = new List<MedyaKisiKartViewModel>();
+                foreach (var c in cast.EnumerateArray().Take(10))
+                {
+                    var actor = c.TryGetProperty("name", out var n) ? (n.GetString() ?? string.Empty) : string.Empty;
+                    if (string.IsNullOrWhiteSpace(actor))
+                    {
+                        continue;
+                    }
+
+                    var role = c.TryGetProperty("character_name", out var ch) ? (ch.GetString() ?? string.Empty) : string.Empty;
+                    var photo = c.TryGetProperty("url_small_image", out var pi) ? (pi.GetString() ?? string.Empty) : string.Empty;
+                    cards.Add(new MedyaKisiKartViewModel
+                    {
+                        Ad = actor,
+                        Rol = role,
+                        FotografUrl = NormalizePosterUrl(photo) ?? string.Empty
+                    });
+                }
+
+                extras.CastCards = cards;
+                extras.Cast = string.Join(", ", cards.Select(x => x.Ad).Take(8));
+            }
+
+            return extras;
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
+    }
+
+    private async Task<DetailExtras> FetchTvExtrasAsync(string name, string lang)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://api.tvmaze.com/singlesearch/shows?q={Uri.EscapeDataString(name)}&embed=cast";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return new DetailExtras();
+            }
+
+            var root = doc.RootElement;
+            var extras = new DetailExtras
+            {
+                Summary = root.TryGetProperty("summary", out var sm) ? StripHtml(sm.GetString() ?? string.Empty) : string.Empty,
+                ReleaseDate = root.TryGetProperty("premiered", out var pr) ? (pr.GetString() ?? string.Empty) : string.Empty,
+                Creator = root.TryGetProperty("network", out var net) && net.TryGetProperty("name", out var nn)
+                    ? (nn.GetString() ?? string.Empty)
+                    : string.Empty,
+                Genre = root.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                    ? string.Join(", ", gs.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    : string.Empty
+            };
+
+            if (root.TryGetProperty("image", out var image) && image.TryGetProperty("original", out var org))
+            {
+                var main = NormalizePosterUrl(org.GetString());
+                if (!string.IsNullOrWhiteSpace(main))
+                {
+                    extras.Images.Add(main);
+                }
+            }
+
+            if (root.TryGetProperty("_embedded", out var emb) &&
+                emb.TryGetProperty("cast", out var cast) &&
+                cast.ValueKind == JsonValueKind.Array)
+            {
+                var cards = new List<MedyaKisiKartViewModel>();
+                foreach (var c in cast.EnumerateArray().Take(12))
+                {
+                    var personName = c.TryGetProperty("person", out var p) && p.TryGetProperty("name", out var pn)
+                        ? (pn.GetString() ?? string.Empty)
+                        : string.Empty;
+                    if (string.IsNullOrWhiteSpace(personName))
+                    {
+                        continue;
+                    }
+
+                    var characterName = c.TryGetProperty("character", out var ch) && ch.TryGetProperty("name", out var cn)
+                        ? (cn.GetString() ?? string.Empty)
+                        : string.Empty;
+                    var photo = c.TryGetProperty("person", out var pp) &&
+                                pp.TryGetProperty("image", out var pimg) &&
+                                pimg.TryGetProperty("medium", out var pm)
+                        ? (pm.GetString() ?? string.Empty)
+                        : string.Empty;
+
+                    cards.Add(new MedyaKisiKartViewModel
+                    {
+                        Ad = personName,
+                        Rol = characterName,
+                        FotografUrl = NormalizePosterUrl(photo) ?? string.Empty
+                    });
+                }
+
+                extras.CastCards = cards;
+                extras.Cast = string.Join(", ", cards.Select(x => x.Ad).Take(8));
+            }
+
+            extras.TrailerUrl = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(name + " trailer")}";
+            return extras;
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
+    }
+
+    private async Task<DetailExtras> FetchGameExtrasAsync(string name, string lang)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var apps = await SearchSteamCommunityAppsAsync(name, lang);
+        var first = apps.FirstOrDefault();
+        if (first is null)
+        {
+            return new DetailExtras();
+        }
+
+        var appUrl = $"https://steamcommunity.com/actions/SearchApps/{Uri.EscapeDataString(first.Name)}";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(appUrl);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (doc.RootElement.ValueKind != JsonValueKind.Array || doc.RootElement.GetArrayLength() == 0)
+            {
+                return new DetailExtras();
+            }
+
+            var top = doc.RootElement[0];
+            if (!top.TryGetProperty("appid", out var appIdEl) || appIdEl.ValueKind != JsonValueKind.Number)
+            {
+                return new DetailExtras();
+            }
+
+            var appId = appIdEl.GetInt32();
+            var en = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+            var storeLang = en ? "english" : "turkish";
+            var cc = en ? "us" : "tr";
+            var detailUrl = $"https://store.steampowered.com/api/appdetails?appids={appId}&l={storeLang}&cc={cc}";
+            await using var dstream = await client.GetStreamAsync(detailUrl);
+            using var ddoc = await JsonDocument.ParseAsync(dstream);
+            if (!ddoc.RootElement.TryGetProperty(appId.ToString(), out var appNode) ||
+                !appNode.TryGetProperty("success", out var success) ||
+                success.ValueKind != JsonValueKind.True ||
+                !appNode.TryGetProperty("data", out var data))
+            {
+                return new DetailExtras();
+            }
+
+            var extras = new DetailExtras
+            {
+                Summary = data.TryGetProperty("detailed_description", out var dd) ? StripHtml(dd.GetString() ?? string.Empty) : string.Empty,
+                ReleaseDate = data.TryGetProperty("release_date", out var rd) && rd.TryGetProperty("date", out var dte) ? (dte.GetString() ?? string.Empty) : string.Empty,
+                Creator = BuildGameCreator(data),
+                Genre = data.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                    ? string.Join(", ", gs.EnumerateArray().Take(4).Select(x => x.TryGetProperty("description", out var g) ? g.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    : string.Empty
+            };
+
+            if (data.TryGetProperty("movies", out var movies) && movies.ValueKind == JsonValueKind.Array && movies.GetArrayLength() > 0)
+            {
+                var movie = movies[0];
+                var mp4 = movie.TryGetProperty("mp4", out var mp4Obj) && mp4Obj.TryGetProperty("max", out var max) ? (max.GetString() ?? string.Empty) : string.Empty;
+                var webm = movie.TryGetProperty("webm", out var webmObj) && webmObj.TryGetProperty("max", out var wmax) ? (wmax.GetString() ?? string.Empty) : string.Empty;
+                extras.TrailerUrl = FirstNonEmpty(mp4, webm);
+            }
+
+            if (data.TryGetProperty("screenshots", out var shots) && shots.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var s in shots.EnumerateArray().Take(10))
+                {
+                    if (s.TryGetProperty("path_full", out var pf))
+                    {
+                        var u = NormalizePosterUrl(pf.GetString());
+                        if (!string.IsNullOrWhiteSpace(u))
+                        {
+                            extras.Images.Add(u);
+                        }
+                    }
+                }
+            }
+
+            return extras;
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
+    }
+
+    private static string BuildGameCreator(JsonElement data)
+    {
+        var developers = data.TryGetProperty("developers", out var dev) && dev.ValueKind == JsonValueKind.Array
+            ? string.Join(", ", dev.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)))
+            : string.Empty;
+        var publishers = data.TryGetProperty("publishers", out var pub) && pub.ValueKind == JsonValueKind.Array
+            ? string.Join(", ", pub.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)))
+            : string.Empty;
+
+        if (!string.IsNullOrWhiteSpace(developers) && !string.IsNullOrWhiteSpace(publishers))
+        {
+            return $"Dev: {developers} | Pub: {publishers}";
+        }
+
+        return FirstNonEmpty(developers, publishers);
+    }
+
+    private async Task<DetailExtras> FetchAnimeExtrasAsync(string name)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var searchUrl = $"https://api.jikan.moe/v4/anime?q={Uri.EscapeDataString(name)}&limit=1&sfw=true";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(searchUrl);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var items) || items.ValueKind != JsonValueKind.Array || items.GetArrayLength() == 0)
+            {
+                return new DetailExtras();
+            }
+
+            var first = items[0];
+            if (!first.TryGetProperty("mal_id", out var idEl) || idEl.ValueKind != JsonValueKind.Number)
+            {
+                return new DetailExtras();
+            }
+            var malId = idEl.GetInt32();
+
+            var fullUrl = $"https://api.jikan.moe/v4/anime/{malId}/full";
+            var charsUrl = $"https://api.jikan.moe/v4/anime/{malId}/characters";
+
+            var fullTask = client.GetStreamAsync(fullUrl);
+            var charsTask = client.GetStreamAsync(charsUrl);
+            await Task.WhenAll(fullTask, charsTask);
+
+            var extras = new DetailExtras();
+
+            await using (var fstream = await fullTask)
+            using (var fdoc = await JsonDocument.ParseAsync(fstream))
+            {
+                if (fdoc.RootElement.TryGetProperty("data", out var data))
+                {
+                    extras.Summary = data.TryGetProperty("synopsis", out var syn) ? (syn.GetString() ?? string.Empty) : string.Empty;
+                    extras.ReleaseDate = data.TryGetProperty("aired", out var aired) && aired.TryGetProperty("from", out var from) ? (from.GetString() ?? string.Empty) : string.Empty;
+                    extras.Creator = data.TryGetProperty("studios", out var studios) && studios.ValueKind == JsonValueKind.Array
+                        ? string.Join(", ", studios.EnumerateArray().Take(3).Select(x => x.TryGetProperty("name", out var n) ? n.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
+                        : string.Empty;
+                    extras.Genre = data.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                        ? string.Join(", ", gs.EnumerateArray().Take(4).Select(x => x.TryGetProperty("name", out var n) ? n.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
+                        : string.Empty;
+                    if (data.TryGetProperty("trailer", out var tr) && tr.TryGetProperty("url", out var url))
+                    {
+                        extras.TrailerUrl = url.GetString() ?? string.Empty;
+                    }
+                    if (data.TryGetProperty("images", out var images) &&
+                        images.TryGetProperty("jpg", out var jpg) &&
+                        jpg.TryGetProperty("large_image_url", out var lrg))
+                    {
+                        var main = NormalizePosterUrl(lrg.GetString());
+                        if (!string.IsNullOrWhiteSpace(main))
+                        {
+                            extras.Images.Add(main);
+                        }
+                    }
+                }
+            }
+
+            await using (var cstream = await charsTask)
+            using (var cdoc = await JsonDocument.ParseAsync(cstream))
+            {
+                if (cdoc.RootElement.TryGetProperty("data", out var chars) && chars.ValueKind == JsonValueKind.Array)
+                {
+                    var cards = new List<MedyaKisiKartViewModel>();
+                    foreach (var ch in chars.EnumerateArray().Take(10))
+                    {
+                        var charName = ch.TryGetProperty("character", out var character) && character.TryGetProperty("name", out var cn)
+                            ? (cn.GetString() ?? string.Empty)
+                            : string.Empty;
+                        if (string.IsNullOrWhiteSpace(charName))
+                        {
+                            continue;
+                        }
+
+                        var voice = ch.TryGetProperty("voice_actors", out var vas) && vas.ValueKind == JsonValueKind.Array && vas.GetArrayLength() > 0
+                            ? (vas[0].TryGetProperty("person", out var p) && p.TryGetProperty("name", out var pn) ? (pn.GetString() ?? string.Empty) : string.Empty)
+                            : string.Empty;
+                        var img = ch.TryGetProperty("character", out var character2) &&
+                                  character2.TryGetProperty("images", out var im) &&
+                                  im.TryGetProperty("jpg", out var jpg) &&
+                                  jpg.TryGetProperty("image_url", out var iu)
+                            ? (iu.GetString() ?? string.Empty)
+                            : string.Empty;
+
+                        cards.Add(new MedyaKisiKartViewModel
+                        {
+                            Ad = charName,
+                            Rol = string.IsNullOrWhiteSpace(voice) ? "Character" : $"Character / VA: {voice}",
+                            FotografUrl = NormalizePosterUrl(img) ?? string.Empty
+                        });
+                    }
+
+                    extras.CastCards = cards;
+                    extras.Cast = string.Join(", ", cards.Select(x => x.Ad).Take(8));
+                }
+            }
+
+            return extras;
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
+    }
+
+    private static string FirstNonEmpty(params string?[] values)
+    {
+        foreach (var v in values)
+        {
+            if (!string.IsNullOrWhiteSpace(v))
+            {
+                return v;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static string ToEmbedUrl(string? url)
+    {
+        var u = (url ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(u))
+        {
+            return string.Empty;
+        }
+
+        if (u.Contains("youtube.com/watch", StringComparison.OrdinalIgnoreCase))
+        {
+            var idx = u.IndexOf("v=", StringComparison.OrdinalIgnoreCase);
+            if (idx >= 0)
+            {
+                var id = u[(idx + 2)..];
+                var amp = id.IndexOf('&');
+                if (amp >= 0)
+                {
+                    id = id[..amp];
+                }
+
+                return $"https://www.youtube.com/embed/{id}";
+            }
+        }
+
+        if (u.Contains("youtu.be/", StringComparison.OrdinalIgnoreCase))
+        {
+            var id = u[(u.LastIndexOf('/') + 1)..];
+            return $"https://www.youtube.com/embed/{id}";
+        }
+
+        return u;
+    }
+
+    private static bool IsDirectVideo(string? url)
+    {
+        var u = (url ?? string.Empty).ToLowerInvariant();
+        return u.EndsWith(".mp4") || u.EndsWith(".webm") || u.Contains(".mp4?");
+    }
+
+    private class DetailExtras
+    {
+        public string Summary { get; set; } = string.Empty;
+        public string Genre { get; set; } = string.Empty;
+        public string ReleaseDate { get; set; } = string.Empty;
+        public string Creator { get; set; } = string.Empty;
+        public string Cast { get; set; } = string.Empty;
+        public string TrailerUrl { get; set; } = string.Empty;
+        public List<string> Images { get; set; } = new();
+        public List<MedyaKisiKartViewModel> CastCards { get; set; } = new();
     }
 
     private async Task<AnaSayfaViewModel> BuildViewModelAsync(string? lang, MedyaKategori seciliKategori, int userId)
