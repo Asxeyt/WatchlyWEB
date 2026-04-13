@@ -321,6 +321,31 @@ public class HomeController : Controller
 
     [HttpGet]
     [Authorize]
+    public async Task<IActionResult> Detay(string lang = "tr", MedyaKategori kategori = MedyaKategori.Film, int? id = null, string? ad = null)
+    {
+        var currentLang = NormalizeLang(lang);
+        var userId = GetCurrentUserId();
+        if (userId is null)
+        {
+            return RedirectToAction("Login", "Account", new { lang = currentLang });
+        }
+
+        var detail = await BuildDetayViewModelAsync(currentLang, kategori, userId.Value, id, ad);
+        if (detail is null)
+        {
+            TempData["Mesaj"] = currentLang == "en" ? "Content not found." : "Icerik bulunamadi.";
+            TempData["MesajTipi"] = "warning";
+            return RedirectToAction(nameof(Index), new { lang = currentLang, kategori });
+        }
+
+        ViewData["Lang"] = currentLang;
+        ViewData["SelectedCategory"] = kategori.ToString();
+        ViewData["BodyClass"] = "detail-page";
+        return View(detail);
+    }
+
+    [HttpGet]
+    [Authorize]
     public IActionResult Settings(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
@@ -334,6 +359,100 @@ public class HomeController : Controller
     public IActionResult Error()
     {
         return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
+    }
+
+    private async Task<MedyaDetayViewModel?> BuildDetayViewModelAsync(string lang, MedyaKategori kategori, int userId, int? id, string? ad)
+    {
+        MedyaOgesi? row = null;
+        if (id.HasValue)
+        {
+            row = await _dbContext.MedyaOgeleri.FirstOrDefaultAsync(x => x.Id == id.Value && x.AppUserId == userId);
+        }
+
+        if (row is null && !string.IsNullOrWhiteSpace(ad))
+        {
+            var rawName = ad.Trim();
+            row = await _dbContext.MedyaOgeleri
+                .FirstOrDefaultAsync(x => x.AppUserId == userId && x.Kategori == kategori && x.Ad.ToLower() == rawName.ToLower());
+        }
+
+        var name = row?.Ad ?? ad?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        var suggestions = await SearchByCategoryAsync(kategori, name, lang);
+        var best = suggestions.FirstOrDefault() ?? new CatalogSuggestionViewModel { Name = name };
+
+        var movieLike = kategori == MedyaKategori.Film || kategori == MedyaKategori.Dizi || kategori == MedyaKategori.CizgiFilm;
+        var trailer = !string.IsNullOrWhiteSpace(best.TrailerUrl)
+            ? best.TrailerUrl
+            : $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(name + " trailer")}";
+
+        var genre = row?.Tur;
+        if (string.IsNullOrWhiteSpace(genre))
+        {
+            genre = best.Genre;
+        }
+        genre = await TranslateIfNeededAsync(genre, lang);
+
+        var summary = row?.Konu;
+        if (string.IsNullOrWhiteSpace(summary))
+        {
+            summary = best.Summary;
+        }
+        summary = await TranslateIfNeededAsync(summary, lang);
+
+        var model = new MedyaDetayViewModel
+        {
+            Dil = lang,
+            Kategori = kategori,
+            KayitId = row?.Id,
+            ListedeMi = row is not null && !row.Izlendi,
+            TamamlandiMi = row?.Izlendi ?? false,
+            Ad = row?.Ad ?? best.Name,
+            PosterUrl = row?.PosterUrl ?? best.PosterUrl,
+            Tur = genre ?? string.Empty,
+            Konu = summary ?? string.Empty,
+            Puan = row?.Puan ?? best.Score,
+            Fiyat = row?.Fiyat ?? best.Price,
+            YayinTarihi = best.ReleaseDate,
+            Oyuncular = await TranslateIfNeededAsync(best.Cast, lang),
+            Yapimci = await TranslateIfNeededAsync(best.Creator, lang),
+            FragmanUrl = trailer
+        };
+
+        if (!movieLike && string.IsNullOrWhiteSpace(model.FragmanUrl))
+        {
+            model.FragmanUrl = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(model.Ad + " trailer")}";
+        }
+
+        var similarQuery = BuildSimilarQuery(model.Ad);
+        var benzer = await SearchByCategoryAsync(kategori, similarQuery, lang);
+        model.BenzerIcerikler = benzer
+            .Where(x => !string.Equals(x.Name, model.Ad, StringComparison.OrdinalIgnoreCase))
+            .Take(8)
+            .ToList();
+
+        return model;
+    }
+
+    private static string BuildSimilarQuery(string name)
+    {
+        var words = (name ?? string.Empty)
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (words.Length == 0)
+        {
+            return name ?? string.Empty;
+        }
+
+        if (words.Length == 1)
+        {
+            return words[0];
+        }
+
+        return string.Join(' ', words.Take(2));
     }
 
     private async Task<AnaSayfaViewModel> BuildViewModelAsync(string? lang, MedyaKategori seciliKategori, int userId)
@@ -852,6 +971,8 @@ public class HomeController : Controller
                 }
 
                 var summary = vi.TryGetProperty("description", out var d) ? (d.GetString() ?? string.Empty) : string.Empty;
+                var releaseDate = vi.TryGetProperty("publishedDate", out var pd) ? (pd.GetString() ?? string.Empty) : string.Empty;
+                var publisher = vi.TryGetProperty("publisher", out var pub) ? (pub.GetString() ?? string.Empty) : string.Empty;
                 var poster = string.Empty;
                 if (vi.TryGetProperty("imageLinks", out var il) &&
                     (il.TryGetProperty("thumbnail", out var th) || il.TryGetProperty("smallThumbnail", out th)))
@@ -871,7 +992,9 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = string.Empty,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = releaseDate,
+                    Creator = string.IsNullOrWhiteSpace(publisher) ? author : publisher
                 });
             }
 
@@ -1019,7 +1142,9 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(cover) ?? string.Empty,
                     Summary = summary,
                     Score = string.Empty,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = year,
+                    Creator = author
                 });
             }
 
@@ -1066,6 +1191,18 @@ public class HomeController : Controller
                 }
                 var summary = show.TryGetProperty("summary", out var sm) ? (sm.GetString() ?? string.Empty) : string.Empty;
                 summary = StripHtml(summary);
+                var releaseDate = show.TryGetProperty("premiered", out var pr) ? (pr.GetString() ?? string.Empty) : string.Empty;
+                var creator = string.Empty;
+                if (show.TryGetProperty("network", out var network) &&
+                    network.TryGetProperty("name", out var networkName))
+                {
+                    creator = networkName.GetString() ?? string.Empty;
+                }
+                else if (show.TryGetProperty("webChannel", out var webChannel) &&
+                         webChannel.TryGetProperty("name", out var webChannelName))
+                {
+                    creator = webChannelName.GetString() ?? string.Empty;
+                }
 
                 var rating = string.Empty;
                 if (show.TryGetProperty("rating", out var ratingObj) &&
@@ -1090,7 +1227,9 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = rating,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = releaseDate,
+                    Creator = creator
                 });
             }
 
@@ -1156,6 +1295,7 @@ public class HomeController : Controller
                 var score = item.TryGetProperty("rating", out var r) && r.ValueKind == JsonValueKind.Number ? r.GetDouble().ToString("0.0") : string.Empty;
                 var poster = item.TryGetProperty("medium_cover_image", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
                 var summary = item.TryGetProperty("summary", out var sm) ? (sm.GetString() ?? string.Empty) : string.Empty;
+                var year = item.TryGetProperty("year", out var y) && y.ValueKind == JsonValueKind.Number ? y.GetInt32().ToString() : string.Empty;
                 var genres = string.Empty;
                 if (item.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array)
                 {
@@ -1168,7 +1308,9 @@ public class HomeController : Controller
                     Genre = genres,
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
-                    Score = score
+                    Score = score,
+                    ReleaseDate = year,
+                    Creator = "YTS"
                 });
             }
 
@@ -1223,7 +1365,9 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = score,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = year,
+                    Creator = "YTS"
                 });
             }
 
@@ -1266,6 +1410,7 @@ public class HomeController : Controller
 
                 var year = item.TryGetProperty("Year", out var y) ? (y.GetString() ?? string.Empty) : string.Empty;
                 var poster = item.TryGetProperty("Poster", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
+                var imdbId = item.TryGetProperty("imdbID", out var imdb) ? (imdb.GetString() ?? string.Empty) : string.Empty;
 
                 list.Add(new CatalogSuggestionViewModel
                 {
@@ -1275,7 +1420,9 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster == "N/A" ? string.Empty : poster) ?? string.Empty,
                     Summary = string.Empty,
                     Score = string.Empty,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = year,
+                    DetailUrl = string.IsNullOrWhiteSpace(imdbId) ? string.Empty : $"https://www.imdb.com/title/{imdbId}/"
                 });
             }
 
@@ -1320,6 +1467,9 @@ public class HomeController : Controller
                 var summary = item.TryGetProperty("longDescription", out var ld)
                     ? (ld.GetString() ?? string.Empty)
                     : (item.TryGetProperty("shortDescription", out var sd) ? (sd.GetString() ?? string.Empty) : string.Empty);
+                var releaseDate = item.TryGetProperty("releaseDate", out var rd) ? (rd.GetString() ?? string.Empty) : string.Empty;
+                var creator = item.TryGetProperty("artistName", out var an) ? (an.GetString() ?? string.Empty) : string.Empty;
+                var trailer = item.TryGetProperty("previewUrl", out var pv) ? (pv.GetString() ?? string.Empty) : string.Empty;
 
                 list.Add(new CatalogSuggestionViewModel
                 {
@@ -1329,7 +1479,10 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = summary,
                     Score = string.Empty,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = releaseDate,
+                    Creator = creator,
+                    TrailerUrl = trailer
                 });
             }
 
@@ -1497,7 +1650,8 @@ public class HomeController : Controller
                     PosterUrl = NormalizePosterUrl(poster) ?? string.Empty,
                     Summary = string.Empty,
                     Score = string.Empty,
-                    Price = string.Empty
+                    Price = string.Empty,
+                    ReleaseDate = year
                 });
             }
 

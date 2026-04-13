@@ -1,0 +1,160 @@
+@model KategoriSecici.ViewModels.MedyaDetayViewModel
+@using KategoriSecici.Models
+@{
+    var isEnglish = Model.Dil == "en";
+    ViewData["Title"] = Model.Ad;
+    string T(string tr, string en) => isEnglish ? en : tr;
+
+    string KategoriAdi(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Kitap => T("Kitap", "Book"),
+        MedyaKategori.Dizi => T("Dizi", "Series"),
+        MedyaKategori.Film => T("Film", "Movie"),
+        MedyaKategori.Oyun => T("Oyun", "Game"),
+        MedyaKategori.CizgiFilm => T("Cizgi Film", "Cartoon"),
+        MedyaKategori.CizgiRoman => T("Cizgi Roman", "Comic"),
+        MedyaKategori.Webtoon => "Webtoon",
+        _ => k.ToString()
+    };
+
+    bool oyun = Model.Kategori == MedyaKategori.Oyun;
+    bool kitap = Model.Kategori == MedyaKategori.Kitap || Model.Kategori == MedyaKategori.CizgiRoman || Model.Kategori == MedyaKategori.Webtoon;
+    string doneText = Model.Kategori switch
+    {
+        MedyaKategori.Oyun => T("Oynadim", "Played"),
+        MedyaKategori.Kitap => T("Okudum", "Read"),
+        MedyaKategori.Manga => T("Okudum", "Read"),
+        MedyaKategori.CizgiRoman => T("Okudum", "Read"),
+        MedyaKategori.Webtoon => T("Okudum", "Read"),
+        _ => T("Izledim", "Watched")
+    };
+}
+
+<div class="media-detail-page">
+    <div class="media-detail-header">
+        <a class="btn btn-outline-secondary" asp-action="Index" asp-route-lang="@Model.Dil" asp-route-kategori="@Model.Kategori">@T("Kategoriye Don", "Back to Category")</a>
+        <span class="media-detail-category">@KategoriAdi(Model.Kategori)</span>
+    </div>
+
+    <div class="media-detail-card">
+        <div class="media-detail-poster">
+            @if (!string.IsNullOrWhiteSpace(Model.PosterUrl))
+            {
+                <img src="@Model.PosterUrl" alt="@Model.Ad" loading="lazy" />
+            }
+            else
+            {
+                <div class="media-detail-no-poster">@T("Poster yok", "No poster")</div>
+            }
+        </div>
+
+        <div class="media-detail-content">
+            <h1>@Model.Ad</h1>
+
+            <div class="media-detail-actions">
+                @if (!Model.ListedeMi && !Model.TamamlandiMi)
+                {
+                    <form asp-action="Ekle" method="post" class="m-0">
+                        <input type="hidden" name="Dil" value="@Model.Dil" />
+                        <input type="hidden" name="SeciliKategori" value="@Model.Kategori" />
+                        <input type="hidden" name="YeniOgeAdi" value="@Model.Ad" />
+                        <input type="hidden" name="YeniOgePosterUrl" value="@Model.PosterUrl" />
+                        <input type="hidden" name="YeniOgeTur" value="@Model.Tur" />
+                        <input type="hidden" name="YeniOgeKonu" value="@Model.Konu" />
+                        <input type="hidden" name="YeniOgePuan" value="@Model.Puan" />
+                        <input type="hidden" name="YeniOgeFiyat" value="@Model.Fiyat" />
+                        <button type="submit" class="btn btn-primary">@T("Listeye Ekle", "Add to List")</button>
+                    </form>
+                }
+                else if (Model.KayitId.HasValue)
+                {
+                    @if (Model.ListedeMi)
+                    {
+                        <form asp-action="IzledimYap" method="post" class="m-0">
+                            <input type="hidden" name="id" value="@Model.KayitId.Value" />
+                            <input type="hidden" name="kategori" value="@Model.Kategori" />
+                            <input type="hidden" name="dil" value="@Model.Dil" />
+                            <button type="submit" class="btn btn-warning">@doneText</button>
+                        </form>
+                    }
+                    else if (Model.TamamlandiMi)
+                    {
+                        <form asp-action="ListeyeGeriAl" method="post" class="m-0">
+                            <input type="hidden" name="id" value="@Model.KayitId.Value" />
+                            <input type="hidden" name="kategori" value="@Model.Kategori" />
+                            <input type="hidden" name="dil" value="@Model.Dil" />
+                            <button type="submit" class="btn btn-outline-secondary">@T("Listeye Al", "Move to List")</button>
+                        </form>
+                    }
+
+                    <form asp-action="Sil" method="post" class="m-0">
+                        <input type="hidden" name="id" value="@Model.KayitId.Value" />
+                        <input type="hidden" name="kategori" value="@Model.Kategori" />
+                        <input type="hidden" name="dil" value="@Model.Dil" />
+                        <button type="submit" class="btn btn-outline-danger">@T("Cikar", "Remove")</button>
+                    </form>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(Model.FragmanUrl))
+                {
+                    <a href="@Model.FragmanUrl" target="_blank" rel="noopener noreferrer" class="btn btn-success">@T("Fragman", "Trailer")</a>
+                }
+            </div>
+
+            <div class="media-detail-meta">
+                <div><strong>@T("Tur", "Genre"):</strong> @(string.IsNullOrWhiteSpace(Model.Tur) ? T("Bilgi yok", "No data") : Model.Tur)</div>
+                @if (oyun)
+                {
+                    <div><strong>@T("Fiyat", "Price"):</strong> @(string.IsNullOrWhiteSpace(Model.Fiyat) ? T("Bilgi yok", "No data") : Model.Fiyat)</div>
+                }
+                else if (!kitap)
+                {
+                    <div><strong>@T("Puan", "Score"):</strong> @(string.IsNullOrWhiteSpace(Model.Puan) ? T("Bilgi yok", "No data") : Model.Puan)</div>
+                }
+                <div><strong>@T("Yayin Tarihi", "Release Date"):</strong> @(string.IsNullOrWhiteSpace(Model.YayinTarihi) ? T("Bilgi yok", "No data") : Model.YayinTarihi)</div>
+                <div><strong>@T("Yapimci", "Producer/Studio"):</strong> @(string.IsNullOrWhiteSpace(Model.Yapimci) ? T("Bilgi yok", "No data") : Model.Yapimci)</div>
+                <div><strong>@T("Oyuncular", "Cast"):</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
+            </div>
+
+            <div class="media-detail-summary">
+                <h2>@T("Detayli Konu", "Detailed Summary")</h2>
+                <p>@(string.IsNullOrWhiteSpace(Model.Konu) ? T("Konu bilgisi yok.", "No summary available.") : Model.Konu)</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="media-detail-similar">
+        <h2>@T("Bunu Sevenler Bunlari da Seviyor", "You may also like")</h2>
+        @if (Model.BenzerIcerikler.Count == 0)
+        {
+            <p class="text-muted mb-0">@T("Benzer icerik bulunamadi.", "No similar content found.")</p>
+        }
+        else
+        {
+            <div class="media-similar-grid">
+                @foreach (var s in Model.BenzerIcerikler)
+                {
+                    <a class="media-similar-card"
+                       asp-action="Detay"
+                       asp-route-lang="@Model.Dil"
+                       asp-route-kategori="@Model.Kategori"
+                       asp-route-ad="@s.Name">
+                        @if (!string.IsNullOrWhiteSpace(s.PosterUrl))
+                        {
+                            <img src="@s.PosterUrl" alt="@s.Name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <div class="media-detail-no-poster small">@T("Poster yok", "No poster")</div>
+                        }
+                        <div class="media-similar-body">
+                            <strong>@s.Name</strong>
+                            <span>@(string.IsNullOrWhiteSpace(s.Genre) ? T("Tur yok", "No genre") : s.Genre)</span>
+                        </div>
+                    </a>
+                }
+            </div>
+        }
+    </div>
+</div>
+

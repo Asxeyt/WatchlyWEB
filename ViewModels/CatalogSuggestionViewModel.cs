@@ -15,4 +15,14 @@ public class CatalogSuggestionViewModel
     public string Score { get; set; } = string.Empty;
 
     public string Price { get; set; } = string.Empty;
+
+    public string ReleaseDate { get; set; } = string.Empty;
+
+    public string Cast { get; set; } = string.Empty;
+
+    public string Creator { get; set; } = string.Empty;
+
+    public string TrailerUrl { get; set; } = string.Empty;
+
+    public string DetailUrl { get; set; } = string.Empty;
 }

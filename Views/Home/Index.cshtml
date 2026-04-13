@@ -203,17 +203,29 @@
                             {
                                 <article class="media-item-card">
                                     <div class="media-item-poster-wrap">
-                                        @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.PosterUrl))
-                                        {
-                                            <img src="@Model.RastgeleSecilenDetay.PosterUrl" alt="@Model.RastgeleSecilenDetay.Ad" class="media-item-poster" loading="lazy" />
-                                        }
-                                        else
-                                        {
-                                            <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
-                                        }
+                                        <a asp-action="Detay"
+                                           asp-route-lang="@Model.Dil"
+                                           asp-route-kategori="@Model.SeciliKategori"
+                                           asp-route-id="@Model.RastgeleSecilenDetay.Id">
+                                            @if (!string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.PosterUrl))
+                                            {
+                                                <img src="@Model.RastgeleSecilenDetay.PosterUrl" alt="@Model.RastgeleSecilenDetay.Ad" class="media-item-poster" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                            }
+                                        </a>
                                     </div>
                                     <div class="media-item-content">
-                                        <h3 class="media-item-title">@Model.RastgeleSecilenDetay.Ad</h3>
+                                        <h3 class="media-item-title">
+                                            <a asp-action="Detay"
+                                               asp-route-lang="@Model.Dil"
+                                               asp-route-kategori="@Model.SeciliKategori"
+                                               asp-route-id="@Model.RastgeleSecilenDetay.Id">
+                                                @Model.RastgeleSecilenDetay.Ad
+                                            </a>
+                                        </h3>
                                         <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Tur) ? BilgiYok() : LocalizeGenre(Model.RastgeleSecilenDetay.Tur))</p>
                                         <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(Model.RastgeleSecilenDetay.Konu) ? OzetYok() : LocalizeSummary(Model.RastgeleSecilenDetay.Konu))</p>
                                         @if (oyunKategori)
@@ -286,17 +298,29 @@
                                 {
                                     <article class="media-item-card">
                                         <div class="media-item-poster-wrap">
-                                            @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
-                                            {
-                                                <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
-                                            }
-                                            else
-                                            {
-                                                <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
-                                            }
+                                            <a asp-action="Detay"
+                                               asp-route-lang="@Model.Dil"
+                                               asp-route-kategori="@Model.SeciliKategori"
+                                               asp-route-id="@item.Id">
+                                                @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
+                                                {
+                                                    <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
+                                                }
+                                                else
+                                                {
+                                                    <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                                }
+                                            </a>
                                         </div>
                                         <div class="media-item-content">
-                                            <h3 class="media-item-title">@item.Ad</h3>
+                                            <h3 class="media-item-title">
+                                                <a asp-action="Detay"
+                                                   asp-route-lang="@Model.Dil"
+                                                   asp-route-kategori="@Model.SeciliKategori"
+                                                   asp-route-id="@item.Id">
+                                                    @item.Ad
+                                                </a>
+                                            </h3>
                                             <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : LocalizeGenre(item.Tur))</p>
                                             <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : LocalizeSummary(item.Konu))</p>
                                             @if (oyunKategori)
@@ -344,17 +368,29 @@
                             {
                                 <article class="media-item-card">
                                     <div class="media-item-poster-wrap">
-                                        @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
-                                        {
-                                            <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
-                                        }
-                                        else
-                                        {
-                                            <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
-                                        }
+                                        <a asp-action="Detay"
+                                           asp-route-lang="@Model.Dil"
+                                           asp-route-kategori="@Model.SeciliKategori"
+                                           asp-route-id="@item.Id">
+                                            @if (!string.IsNullOrWhiteSpace(item.PosterUrl))
+                                            {
+                                                <img src="@item.PosterUrl" alt="@item.Ad" class="media-item-poster" loading="lazy" />
+                                            }
+                                            else
+                                            {
+                                                <div class="media-item-poster media-item-poster-empty">@T("Poster yok", "No poster")</div>
+                                            }
+                                        </a>
                                     </div>
                                     <div class="media-item-content">
-                                        <h3 class="media-item-title">@item.Ad</h3>
+                                        <h3 class="media-item-title">
+                                            <a asp-action="Detay"
+                                               asp-route-lang="@Model.Dil"
+                                               asp-route-kategori="@Model.SeciliKategori"
+                                               asp-route-id="@item.Id">
+                                                @item.Ad
+                                            </a>
+                                        </h3>
                                         <p class="media-item-line"><strong>@TurEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Tur) ? BilgiYok() : LocalizeGenre(item.Tur))</p>
                                         <p class="media-item-line media-item-summary"><strong>@KonuEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Konu) ? OzetYok() : LocalizeSummary(item.Konu))</p>
                                         @if (oyunKategori)
@@ -437,14 +473,17 @@
 
     const html = items.map(item => {
       const name = esc(item.name || '');
+      const rawName = item.name || '';
       const altName = esc(item.altName || '');
       const score = esc(item.score || '');
       const summary = esc(item.summary || '');
       const genre = esc(item.genre || item.altName || '');
       const price = esc(item.price || '');
       const poster = esc(item.posterUrl || '');
+      const detailUrl = `/Home/Detay?lang=${encodeURIComponent(lang)}&kategori=${encodeURIComponent(kategori)}&ad=${encodeURIComponent(rawName)}`;
       return `
-        <button type="button" class="catalog-result-item"
+        <a class="catalog-result-item"
+          href="${detailUrl}"
           data-name="${name}"
           data-poster="${poster}"
           data-genre="${genre}"
@@ -459,25 +498,12 @@
             ${score ? `<span class="catalog-sub">${scoreLabel}: ${score}</span>` : ''}
             ${price ? `<span class="catalog-sub">${priceLabel}: ${price}</span>` : ''}
           </span>
-        </button>
+        </a>
       `;
     }).join('');
 
     resultsBox.innerHTML = html;
     resultsBox.classList.remove('d-none');
-
-    resultsBox.querySelectorAll('.catalog-result-item').forEach(btn => {
-      btn.addEventListener('click', () => {
-        input.value = btn.getAttribute('data-name') || '';
-        if (selectedPoster) selectedPoster.value = btn.getAttribute('data-poster') || '';
-        if (selectedGenre) selectedGenre.value = btn.getAttribute('data-genre') || '';
-        if (selectedSummary) selectedSummary.value = btn.getAttribute('data-summary') || '';
-        if (selectedScore) selectedScore.value = btn.getAttribute('data-score') || '';
-        if (selectedPrice) selectedPrice.value = btn.getAttribute('data-price') || '';
-        hideResults();
-        input.focus();
-      });
-    });
   }
 
   input.addEventListener('input', () => {
