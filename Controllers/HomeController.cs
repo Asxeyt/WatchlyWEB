@@ -885,13 +885,21 @@ public class HomeController : Controller
 
     private async Task<List<CatalogSuggestionViewModel>> SearchCartoonsAsync(string query, string lang)
     {
-        var tv = await SearchTvMazeAsync(query);
-        var tvAnimation = await SearchTvMazeAsync($"{query} animation");
-        var movies = await SearchMoviesAsync(query);
-        var moviesAnimation = await SearchMoviesAsync($"{query} animation");
+        var tvTask = SearchTvMazeAsync(query);
+        var tvAnimationTask = SearchTvMazeAsync($"{query} animation");
+        var moviesTask = SearchMoviesAsync(query);
+        var moviesAnimationTask = SearchMoviesAsync($"{query} animation");
+        var moviesStudiosTask = SearchMoviesAsync($"{query} disney pixar dreamworks illumination sony animation warner animation nickelodeon cartoon network");
         var local = SearchLocalCartoons(query, lang);
 
-        var merged = tv.Concat(tvAnimation).Concat(movies).Concat(moviesAnimation).Concat(local)
+        await Task.WhenAll(tvTask, tvAnimationTask, moviesTask, moviesAnimationTask, moviesStudiosTask);
+
+        var merged = tvTask.Result
+            .Concat(tvAnimationTask.Result)
+            .Concat(moviesTask.Result)
+            .Concat(moviesAnimationTask.Result)
+            .Concat(moviesStudiosTask.Result)
+            .Concat(local)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
             .ToList();
@@ -900,13 +908,21 @@ public class HomeController : Controller
             .Where(x =>
                 (x.Genre ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
                 (x.Genre ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase) ||
+                (x.Genre ?? string.Empty).Contains("anime", StringComparison.OrdinalIgnoreCase) ||
+                (x.Genre ?? string.Empty).Contains("family", StringComparison.OrdinalIgnoreCase) ||
                 (x.Summary ?? string.Empty).Contains("animation", StringComparison.OrdinalIgnoreCase) ||
+                (x.Summary ?? string.Empty).Contains("animated", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("cartoon", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("anime", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("sponge", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("henry", StringComparison.OrdinalIgnoreCase) ||
                 (x.Name ?? string.Empty).Contains("tom", StringComparison.OrdinalIgnoreCase) ||
-                (x.Name ?? string.Empty).Contains("jerry", StringComparison.OrdinalIgnoreCase))
+                (x.Name ?? string.Empty).Contains("jerry", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("disney", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("pixar", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("dreamworks", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("nickelodeon", StringComparison.OrdinalIgnoreCase) ||
+                (x.Name ?? string.Empty).Contains("cartoon network", StringComparison.OrdinalIgnoreCase))
             .ToList();
 
         return RankFuzzy(query, filtered.Count > 0 ? filtered : merged);
@@ -1564,16 +1580,57 @@ public class HomeController : Controller
         var tr = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
         var local = new List<CatalogSuggestionViewModel>
         {
-            new() { Name = "SpongeBob SquarePants", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Bikini Bottom'da gecen komik maceralar." : "Funny adventures in Bikini Bottom.", Score = "8.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/81/202627.jpg" },
-            new() { Name = "Henry Danger", Genre = tr ? "Aile, Komedi, Cocuk" : "Family, Comedy, Kids", Summary = tr ? "Kaptan Man'in yardimcisi olan Henry'nin maceralari." : "Henry's adventures as Captain Man's sidekick.", Score = "5.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/1/2605.jpg" },
-            new() { Name = "Tom and Jerry", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Kedi-fare kovalamacasi klasik serisi." : "Classic cat-and-mouse chase series.", Score = "8.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/f6/TomandJerryTitleCardc.jpg" },
-            new() { Name = "Scooby-Doo", Genre = tr ? "Animasyon, Gizem" : "Animation, Mystery", Summary = tr ? "Scooby ve ekibi gizemleri cozer." : "Scooby and team solve mysteries.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/5/53/Scooby-Doo%21_Mystery_Incorporated_title_card.png" },
-            new() { Name = "Puss in Boots", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "DreamWorks'un Cizmeli Kedi macerasi." : "DreamWorks' Puss in Boots adventure.", Score = "7.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/6/6d/Puss_in_Boots_2011_poster.jpg" },
-            new() { Name = "Frozen", Genre = tr ? "Animasyon, Muzikal" : "Animation, Musical", Summary = tr ? "Disney prensesleri Elsa ve Anna'nin hikayesi." : "Disney princess story of Elsa and Anna.", Score = "7.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/05/Frozen_%282013_film%29_poster.jpg" },
+            new() { Name = "SpongeBob SquarePants", AltName = "Sunger Bob", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Nickelodeon'un Bikini Bottom maceralari." : "Nickelodeon's Bikini Bottom adventures.", Score = "8.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/81/202627.jpg" },
+            new() { Name = "Henry Danger", AltName = "Risk Avcisi Henry", Genre = tr ? "Aile, Komedi, Cocuk" : "Family, Comedy, Kids", Summary = tr ? "Nickelodeon dizisi, Kaptan Man'in yardimcisi Henry'nin maceralari." : "Nickelodeon series about Henry's adventures as Captain Man's sidekick.", Score = "5.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/1/2605.jpg" },
+            new() { Name = "The Loud House", AltName = "Gurultu Ailesi", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Nickelodeon aile-komedi animasyonu." : "Nickelodeon family-comedy animation.", Score = "7.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/103/258851.jpg" },
+            new() { Name = "Avatar: The Last Airbender", AltName = "Avatar Son Hava Bukucu", Genre = tr ? "Animasyon, Macera, Fantastik" : "Animation, Adventure, Fantasy", Summary = tr ? "Nickelodeon efsanesi." : "Nickelodeon classic.", Score = "9.3", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/1/2608.jpg" },
+            new() { Name = "Teenage Mutant Ninja Turtles", AltName = "Ninja Kaplumbagalar", Genre = tr ? "Animasyon, Aksiyon" : "Animation, Action", Summary = tr ? "Nickelodeon TMNT serisi." : "Nickelodeon TMNT series.", Score = "7.8", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/2/6756.jpg" },
+            new() { Name = "Adventure Time", AltName = "Macera Zamani", Genre = tr ? "Animasyon, Fantastik" : "Animation, Fantasy", Summary = tr ? "Cartoon Network klasiği." : "A Cartoon Network classic.", Score = "8.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/96/Adventure_Time_-_Title_card.png" },
+            new() { Name = "Regular Show", AltName = "Sira Disi", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Cartoon Network komedi serisi." : "Cartoon Network comedy series.", Score = "8.5", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/6/16903.jpg" },
+            new() { Name = "Ben 10", AltName = "Ben Ten", Genre = tr ? "Animasyon, Aksiyon, Macera" : "Animation, Action, Adventure", Summary = tr ? "Cartoon Network aksiyon-macera serisi." : "Cartoon Network action-adventure series.", Score = "7.5", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/75/188428.jpg" },
+            new() { Name = "The Amazing World of Gumball", AltName = "Gumball", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Cartoon Network modern animasyon hit'i." : "Cartoon Network modern animation hit.", Score = "8.3", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/132/332541.jpg" },
+            new() { Name = "We Bare Bears", AltName = "Uc Ayicik", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Cartoon Network sevimli ayiciklar serisi." : "Cartoon Network adorable bear series.", Score = "7.9", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/54/136717.jpg" },
+            new() { Name = "Phineas and Ferb", AltName = "Fineas ve Forb", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Disney Television Animation yapimi." : "Disney Television Animation production.", Score = "8.1", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/89/223318.jpg" },
+            new() { Name = "Gravity Falls", AltName = "Esrarengiz Kasaba", Genre = tr ? "Animasyon, Gizem, Komedi" : "Animation, Mystery, Comedy", Summary = tr ? "Disney Channel/Disney Television Animation efsanesi." : "Disney Channel/Disney Television Animation classic.", Score = "8.9", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/49/123761.jpg" },
+            new() { Name = "DuckTales", AltName = "Varyemezler", Genre = tr ? "Animasyon, Macera, Komedi" : "Animation, Adventure, Comedy", Summary = tr ? "Disney Television Animation serisi." : "Disney Television Animation series.", Score = "8.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/113/282455.jpg" },
+            new() { Name = "Kim Possible", Genre = tr ? "Animasyon, Aksiyon, Komedi" : "Animation, Action, Comedy", Summary = tr ? "Disney Channel animasyon klasigi." : "Disney Channel animation classic.", Score = "7.2", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/232/580356.jpg" },
+            new() { Name = "The Owl House", AltName = "Baykus Evi", Genre = tr ? "Animasyon, Fantastik" : "Animation, Fantasy", Summary = tr ? "Disney Television Animation modern serisi." : "Disney Television Animation modern series.", Score = "8.5", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/238/596972.jpg" },
+            new() { Name = "Amphibia", Genre = tr ? "Animasyon, Fantastik, Macera" : "Animation, Fantasy, Adventure", Summary = tr ? "Disney Television Animation." : "Disney Television Animation.", Score = "8.0", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/225/564634.jpg" },
+            new() { Name = "Frozen", AltName = "Karlar Ulkesi", Genre = tr ? "Animasyon, Muzikal" : "Animation, Musical", Summary = tr ? "Disney prensesleri Elsa ve Anna'nin hikayesi." : "Disney princess story of Elsa and Anna.", Score = "7.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/05/Frozen_%282013_film%29_poster.jpg" },
+            new() { Name = "Moana", AltName = "Vaiana", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "Disney animasyon filmi." : "Disney animated feature.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/2/26/Moana_Teaser_Poster.jpg" },
+            new() { Name = "Encanto", Genre = tr ? "Animasyon, Muzikal" : "Animation, Musical", Summary = tr ? "Disney aile temali animasyon filmi." : "Disney family-themed animated feature.", Score = "7.2", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/1/1d/Encanto_poster.jpeg" },
+            new() { Name = "Zootopia", AltName = "Zootropolis", Genre = tr ? "Animasyon, Komedi, Macera" : "Animation, Comedy, Adventure", Summary = tr ? "Disney polisiye-komedi animasyonu." : "Disney buddy-cop animation.", Score = "8.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/96/Zootopia_%28movie_poster%29.jpg" },
+            new() { Name = "Tangled", AltName = "Rapunzel", Genre = tr ? "Animasyon, Macera, Komedi" : "Animation, Adventure, Comedy", Summary = tr ? "Disney prenses animasyonu." : "Disney princess animation.", Score = "7.7", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/a/a8/Tangled_poster.jpg" },
             new() { Name = "Bolt", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Disney'in Bolt animasyon filmi." : "Disney's Bolt animated film.", Score = "6.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/4/44/Bolt_poster.jpg" },
-            new() { Name = "Toy Story", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Pixar'in oyuncaklar dunyasi." : "Pixar's world of toys.", Score = "8.3", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/1/13/Toy_Story.jpg" },
+            new() { Name = "Toy Story", AltName = "Oyuncak Hikayesi", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Pixar'in oyuncaklar dunyasi." : "Pixar's world of toys.", Score = "8.3", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/1/13/Toy_Story.jpg" },
+            new() { Name = "Cars", AltName = "Arabalar", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Pixar'in yaris dunyasi." : "Pixar racing world.", Score = "7.2", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/34/Cars_2006.jpg" },
+            new() { Name = "Coco", Genre = tr ? "Animasyon, Aile, Muzik" : "Animation, Family, Music", Summary = tr ? "Pixar'in muzik ve aile temali filmi." : "Pixar's music and family themed film.", Score = "8.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/90/Coco_%282017_film%29_poster.jpg" },
+            new() { Name = "Inside Out", AltName = "Ters Yuz", Genre = tr ? "Animasyon, Aile, Komedi" : "Animation, Family, Comedy", Summary = tr ? "Pixar'in duygular dunyasi." : "Pixar's world of emotions.", Score = "8.1", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/f7/Inside_Out_%282015_film%29_poster.jpg" },
+            new() { Name = "Finding Nemo", AltName = "Kayıp Balik Nemo", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "Pixar deniz macerasi." : "Pixar sea adventure.", Score = "8.2", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/2/29/Finding_Nemo.jpg" },
+            new() { Name = "WALL-E", Genre = tr ? "Animasyon, Bilim Kurgu" : "Animation, Sci-Fi", Summary = tr ? "Pixar'in robot hikayesi." : "Pixar robot story.", Score = "8.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/c/c2/WALL-Eposter.jpg" },
+            new() { Name = "Up", AltName = "Yukari Bak", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "Pixar klasik macera filmi." : "Pixar classic adventure film.", Score = "8.3", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/05/Up_%282009_film%29.jpg" },
+            new() { Name = "Shrek", AltName = "Srek", Genre = tr ? "Animasyon, Komedi, Macera" : "Animation, Comedy, Adventure", Summary = tr ? "DreamWorks klasik animasyon serisi." : "DreamWorks classic animated franchise.", Score = "7.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/39/Shrek.jpg" },
+            new() { Name = "Puss in Boots", AltName = "Cizmeli Kedi", Genre = tr ? "Animasyon, Macera" : "Animation, Adventure", Summary = tr ? "DreamWorks'un Cizmeli Kedi macerasi." : "DreamWorks' Puss in Boots adventure.", Score = "7.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/6/6d/Puss_in_Boots_2011_poster.jpg" },
             new() { Name = "Kung Fu Panda", Genre = tr ? "Animasyon, Aksiyon" : "Animation, Action", Summary = tr ? "DreamWorks'ten Po'nun efsane yolculugu." : "Po's legendary journey from DreamWorks.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/7/76/Kungfupanda.jpg" },
-            new() { Name = "Adventure Time", Genre = tr ? "Animasyon, Fantastik" : "Animation, Fantasy", Summary = tr ? "Cartoon Network klasiği." : "A Cartoon Network classic.", Score = "8.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/96/Adventure_Time_-_Title_card.png" }
+            new() { Name = "How to Train Your Dragon", AltName = "Ejderhani Nasil Egitirsin", Genre = tr ? "Animasyon, Fantastik, Macera" : "Animation, Fantasy, Adventure", Summary = tr ? "DreamWorks ejderha serisi." : "DreamWorks dragon series.", Score = "8.1", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/99/How_to_Train_Your_Dragon_Poster.jpg" },
+            new() { Name = "Madagascar", Genre = tr ? "Animasyon, Komedi, Macera" : "Animation, Comedy, Adventure", Summary = tr ? "DreamWorks hayvanat bahcesi macerasi." : "DreamWorks zoo adventure.", Score = "6.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/6/60/Madagascar_%282005_film%29.jpg" },
+            new() { Name = "Trolls", Genre = tr ? "Animasyon, Muzikal, Komedi" : "Animation, Musical, Comedy", Summary = tr ? "DreamWorks muzikli animasyon serisi." : "DreamWorks musical animation franchise.", Score = "6.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/a/a0/Trolls_%28film%29_poster.jpg" },
+            new() { Name = "The Boss Baby", AltName = "Patron Bebek", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "DreamWorks komedi filmi." : "DreamWorks comedy film.", Score = "6.3", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/0e/The_Boss_Baby_poster.jpg" },
+            new() { Name = "Spider-Man: Into the Spider-Verse", AltName = "Spider Verse", Genre = tr ? "Animasyon, Aksiyon" : "Animation, Action", Summary = tr ? "Sony Pictures Animation yapimi Oscarli film." : "Sony Pictures Animation Oscar-winning film.", Score = "8.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/fb/Spider-Man_Into_the_Spider-Verse_poster.jpg" },
+            new() { Name = "Hotel Transylvania", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Sony Pictures Animation canavar komedisi." : "Sony Pictures Animation monster comedy.", Score = "7.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/2/20/Hotel_Transylvania_Poster.jpg" },
+            new() { Name = "Cloudy with a Chance of Meatballs", AltName = "Kofte Yagmuru", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Sony Pictures Animation komedisi." : "Sony Pictures Animation comedy.", Score = "6.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/01/Cloudy_with_a_Chance_of_Meatballs_poster.jpg" },
+            new() { Name = "The Smurfs", AltName = "Sirinler", Genre = tr ? "Animasyon, Aile, Komedi" : "Animation, Family, Comedy", Summary = tr ? "Sony yapimi Sirinler filmi." : "Sony produced Smurfs film.", Score = "5.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/35/The_Smurfs_poster.jpg" },
+            new() { Name = "Despicable Me", AltName = "Cilgin Hirsiz", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Illumination'in Minion evreni." : "Illumination's Minion universe.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/d/db/Despicable_Me_Poster.jpg" },
+            new() { Name = "Minions", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Illumination Minions filmi." : "Illumination Minions film.", Score = "6.4", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/3d/Minions_poster.jpg" },
+            new() { Name = "Sing", Genre = tr ? "Animasyon, Muzikal, Komedi" : "Animation, Musical, Comedy", Summary = tr ? "Illumination muzik yarismasi filmi." : "Illumination singing contest film.", Score = "7.1", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/8/8f/Sing_%282016_animated_film%29_poster.jpg" },
+            new() { Name = "The Secret Life of Pets", AltName = "Evcil Hayvanlarin Gizli Yasami", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Illumination evcil hayvan komedisi." : "Illumination pet comedy.", Score = "6.5", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/6/64/The_Secret_Life_of_Pets_poster.jpg" },
+            new() { Name = "The Super Mario Bros. Movie", AltName = "Super Mario Bros Filmi", Genre = tr ? "Animasyon, Macera, Komedi" : "Animation, Adventure, Comedy", Summary = tr ? "Illumination ve Nintendo ortak yapimi." : "Illumination and Nintendo co-production.", Score = "7.1", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/4/44/The_Super_Mario_Bros._Movie_poster.jpg" },
+            new() { Name = "PAW Patrol: The Movie", AltName = "Pati Devriyesi", Genre = tr ? "Animasyon, Aile" : "Animation, Family", Summary = tr ? "Paramount/Nickelodeon animasyon filmi." : "Paramount/Nickelodeon animated movie.", Score = "6.1", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/0/0f/PAW_Patrol_The_Movie_poster.jpg" },
+            new() { Name = "Teenage Mutant Ninja Turtles: Mutant Mayhem", AltName = "Mutant Kargasasi", Genre = tr ? "Animasyon, Aksiyon" : "Animation, Action", Summary = tr ? "Paramount Animation yapimi TMNT filmi." : "TMNT animated feature by Paramount Animation.", Score = "7.2", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/7/75/Teenage_Mutant_Ninja_Turtles_Mutant_Mayhem_poster.jpg" },
+            new() { Name = "Looney Tunes", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Warner Bros. Animation klasigi." : "Warner Bros. Animation classic.", Score = "7.5", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/7/75/Looney_Tunes_golden_collection.jpg" },
+            new() { Name = "Tom and Jerry", Genre = tr ? "Animasyon, Komedi" : "Animation, Comedy", Summary = tr ? "Warner Bros. Animation klasik serisi." : "Warner Bros. Animation classic series.", Score = "8.0", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/f/f6/TomandJerryTitleCardc.jpg" },
+            new() { Name = "Scooby-Doo", Genre = tr ? "Animasyon, Gizem" : "Animation, Mystery", Summary = tr ? "Scooby ve ekibi gizemleri cozer." : "Scooby and team solve mysteries.", Score = "7.6", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/5/53/Scooby-Doo%21_Mystery_Incorporated_title_card.png" },
+            new() { Name = "Teen Titans Go!", AltName = "Genc Titanlar", Genre = tr ? "Animasyon, Komedi, Aksiyon" : "Animation, Comedy, Action", Summary = tr ? "Cartoon Network/Warner ortak evreni." : "Cartoon Network/Warner shared universe.", Score = "5.7", PosterUrl = "https://static.tvmaze.com/uploads/images/medium_portrait/43/109351.jpg" }
         };
         return RankFuzzy(query, local);
     }
