@@ -22,4 +22,17 @@ public class ProfileViewModel
     public int DiziCount { get; set; }
     public int FilmCount { get; set; }
     public int OyunCount { get; set; }
+    public int CizgiFilmCount { get; set; }
+    public int CizgiRomanCount { get; set; }
+    public int WebtoonCount { get; set; }
+
+    public string AnimeMuk { get; set; } = "-";
+    public string MangaMuk { get; set; } = "-";
+    public string KitapMuk { get; set; } = "-";
+    public string DiziMuk { get; set; } = "-";
+    public string FilmMuk { get; set; } = "-";
+    public string OyunMuk { get; set; } = "-";
+    public string CizgiFilmMuk { get; set; } = "-";
+    public string CizgiRomanMuk { get; set; } = "-";
+    public string WebtoonMuk { get; set; } = "-";
 }

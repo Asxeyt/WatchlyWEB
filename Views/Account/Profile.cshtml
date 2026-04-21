@@ -74,7 +74,32 @@
             <div class="profile-stat-number">@Model.OyunCount</div>
             <div class="profile-stat-label">@T("Oyun", "Game")</div>
         </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.CizgiFilmCount</div>
+            <div class="profile-stat-label">@T("Cizgi Film", "Cartoon")</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.CizgiRomanCount</div>
+            <div class="profile-stat-label">@T("Cizgi Roman", "Comic")</div>
+        </article>
+        <article class="profile-stat-card">
+            <div class="profile-stat-number">@Model.WebtoonCount</div>
+            <div class="profile-stat-label">Webtoon</div>
+        </article>
     </div>
 
-    <div class="profile-future-space"></div>
+    <div class="profile-future-space p-3">
+        <h2 class="h5 mb-3">@T("Mukemmel Secimlerim (MUK)", "My Perfect Picks (MUK)")</h2>
+        <div class="profile-stats-grid">
+            <article class="profile-stat-card"><div class="profile-stat-label">Anime</div><div class="profile-stat-number">@Model.AnimeMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">Manga</div><div class="profile-stat-number">@Model.MangaMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Kitap", "Book")</div><div class="profile-stat-number">@Model.KitapMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Dizi", "Series")</div><div class="profile-stat-number">@Model.DiziMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Film", "Movie")</div><div class="profile-stat-number">@Model.FilmMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Oyun", "Game")</div><div class="profile-stat-number">@Model.OyunMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Cizgi Film", "Cartoon")</div><div class="profile-stat-number">@Model.CizgiFilmMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">@T("Cizgi Roman", "Comic")</div><div class="profile-stat-number">@Model.CizgiRomanMuk</div></article>
+            <article class="profile-stat-card"><div class="profile-stat-label">Webtoon</div><div class="profile-stat-number">@Model.WebtoonMuk</div></article>
+        </div>
+    </div>
 </section>

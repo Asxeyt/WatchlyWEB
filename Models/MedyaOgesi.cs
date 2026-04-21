@@ -32,5 +32,7 @@ public class MedyaOgesi
 
     public bool Izlendi { get; set; } = false;
 
+    public int? DegerlendirmeSeviyesi { get; set; }
+
     public DateTime OlusturmaTarihi { get; set; } = DateTime.UtcNow;
 }

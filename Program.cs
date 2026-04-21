@@ -176,6 +176,7 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     var hasKonu = false;
     var hasPuan = false;
     var hasFiyat = false;
+    var hasDegerlendirmeSeviyesi = false;
     using (var reader = cmd.ExecuteReader())
     {
         while (reader.Read())
@@ -209,6 +210,10 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
             {
                 hasFiyat = true;
             }
+            if (string.Equals(reader["name"]?.ToString(), "DegerlendirmeSeviyesi", StringComparison.OrdinalIgnoreCase))
+            {
+                hasDegerlendirmeSeviyesi = true;
+            }
         }
     }
 
@@ -240,6 +245,10 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
     if (!hasFiyat)
     {
         db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN Fiyat TEXT NULL;");
+    }
+    if (!hasDegerlendirmeSeviyesi)
+    {
+        db.Database.ExecuteSqlRaw("ALTER TABLE MedyaOgeleri ADD COLUMN DegerlendirmeSeviyesi INTEGER NULL;");
     }
 
     db.Database.ExecuteSqlRaw("""
@@ -414,7 +423,8 @@ static void ApplyPostgresLegacyFixes(AppDbContext db)
         ADD COLUMN IF NOT EXISTS "Tur" character varying(240) NULL,
         ADD COLUMN IF NOT EXISTS "Konu" character varying(3000) NULL,
         ADD COLUMN IF NOT EXISTS "Puan" character varying(80) NULL,
-        ADD COLUMN IF NOT EXISTS "Fiyat" character varying(80) NULL;
+        ADD COLUMN IF NOT EXISTS "Fiyat" character varying(80) NULL,
+        ADD COLUMN IF NOT EXISTS "DegerlendirmeSeviyesi" integer NULL;
         """);
 
     db.Database.ExecuteSqlRaw("""

@@ -57,6 +57,17 @@
         _ => T("Izlediklerim", "Watched")
     };
 
+    string DegerlendirmeEtiketi(int? level) => level switch
+    {
+        1 => T("Cok Kotu", "Very Bad"),
+        2 => T("Kotu", "Bad"),
+        3 => T("Orta", "Mid"),
+        4 => T("Iyi", "Good"),
+        5 => T("Cok Iyi", "Very Good"),
+        6 => "MUK",
+        _ => T("Iyi", "Good")
+    };
+
     string OrnekMetin(MedyaKategori k) => k switch
     {
         MedyaKategori.Anime => "One Piece",
@@ -333,12 +344,16 @@
                                             }
                                         </div>
                                         <div class="media-item-actions">
-                                            <form asp-action="IzledimYap" method="post" class="m-0">
-                                                <input type="hidden" name="id" value="@item.Id" />
-                                                <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
-                                                <input type="hidden" name="dil" value="@Model.Dil" />
-                                                <button type="submit" class="btn btn-sm btn-warning">@TamamlandiButonuMetni(Model.SeciliKategori)</button>
-                                            </form>
+                                            <button type="button"
+                                                    class="btn btn-sm btn-warning"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#ratingModal"
+                                                    data-item-id="@item.Id"
+                                                    data-item-name="@item.Ad"
+                                                    data-kategori="@Model.SeciliKategori"
+                                                    data-dil="@Model.Dil">
+                                                @TamamlandiButonuMetni(Model.SeciliKategori)
+                                            </button>
                                             <form asp-action="Sil" method="post" class="m-0">
                                                 <input type="hidden" name="id" value="@item.Id" />
                                                 <input type="hidden" name="kategori" value="@Model.SeciliKategori" />
@@ -401,6 +416,7 @@
                                         {
                                             <p class="media-item-line"><strong>@PuanEtiketi():</strong> @(string.IsNullOrWhiteSpace(item.Puan) ? BilgiYok() : item.Puan)</p>
                                         }
+                                        <p class="media-item-line"><strong>@T("Senin puanin", "Your rating"):</strong> @DegerlendirmeEtiketi(item.DegerlendirmeSeviyesi)</p>
                                     </div>
                                     <div class="media-item-actions">
                                         <form asp-action="ListeyeGeriAl" method="post" class="m-0">
@@ -419,6 +435,41 @@
         </div>
     </section>
 </div>
+</div>
+
+<div class="modal fade" id="ratingModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">@T("Puanini sec", "Select your rating")</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form asp-action="IzledimYap" method="post">
+        @Html.AntiForgeryToken()
+        <div class="modal-body">
+          <p class="mb-2"><strong id="ratingItemName"></strong></p>
+          <input type="hidden" name="id" id="ratingItemId" />
+          <input type="hidden" name="kategori" id="ratingKategori" />
+          <input type="hidden" name="dil" id="ratingDil" />
+          <input type="hidden" name="degerlendirmeSeviyesi" id="ratingLevel" value="4" />
+
+          <div class="d-grid gap-2">
+            <button type="button" class="btn btn-outline-danger text-start rating-level-btn" data-level="1">@T("1 - Cok Kotu", "1 - Very Bad")</button>
+            <button type="button" class="btn btn-outline-danger text-start rating-level-btn" data-level="2">@T("2 - Kotu", "2 - Bad")</button>
+            <button type="button" class="btn btn-outline-warning text-start rating-level-btn" data-level="3">@T("3 - Orta", "3 - Mid")</button>
+            <button type="button" class="btn btn-outline-primary text-start rating-level-btn active" data-level="4">@T("4 - Iyi", "4 - Good")</button>
+            <button type="button" class="btn btn-outline-success text-start rating-level-btn" data-level="5">@T("5 - Cok Iyi", "5 - Very Good")</button>
+            <button type="button" class="btn btn-outline-dark text-start rating-level-btn" data-level="6">@T("6 - MUK (Daha iyisi olamaz)", "6 - MUK (Perfect)")</button>
+          </div>
+          <small class="text-muted d-block mt-2">@T("Not: Her kategoride yalnizca bir tane MUK olur.", "Note: Only one MUK is allowed per category.")</small>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@T("Vazgec", "Cancel")</button>
+          <button type="submit" class="btn btn-warning">@T("Kaydet ve tamamla", "Save and complete")</button>
+        </div>
+      </form>
+    </div>
+  </div>
 </div>
 
 @section Scripts {
@@ -532,6 +583,38 @@
     if (!resultsBox.contains(e.target) && e.target !== input) {
       hideResults();
     }
+  });
+})();
+
+(() => {
+  const modal = document.getElementById('ratingModal');
+  if (!modal) return;
+
+  const itemId = document.getElementById('ratingItemId');
+  const itemName = document.getElementById('ratingItemName');
+  const kategori = document.getElementById('ratingKategori');
+  const dil = document.getElementById('ratingDil');
+  const levelInput = document.getElementById('ratingLevel');
+
+  modal.addEventListener('show.bs.modal', (ev) => {
+    const btn = ev.relatedTarget;
+    if (!btn) return;
+    itemId.value = btn.getAttribute('data-item-id') || '';
+    itemName.textContent = btn.getAttribute('data-item-name') || '';
+    kategori.value = btn.getAttribute('data-kategori') || '';
+    dil.value = btn.getAttribute('data-dil') || 'tr';
+    levelInput.value = '4';
+    modal.querySelectorAll('.rating-level-btn').forEach(x => x.classList.remove('active'));
+    const defaultBtn = modal.querySelector('.rating-level-btn[data-level="4"]');
+    if (defaultBtn) defaultBtn.classList.add('active');
+  });
+
+  modal.querySelectorAll('.rating-level-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      levelInput.value = btn.getAttribute('data-level') || '4';
+      modal.querySelectorAll('.rating-level-btn').forEach(x => x.classList.remove('active'));
+      btn.classList.add('active');
+    });
   });
 })();
 </script>

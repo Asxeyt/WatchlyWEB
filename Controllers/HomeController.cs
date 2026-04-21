@@ -176,7 +176,7 @@ public class HomeController : Controller
     [HttpPost]
     [ValidateAntiForgeryToken]
     [Authorize]
-    public async Task<IActionResult> IzledimYap(int id, MedyaKategori kategori, string dil = "tr")
+    public async Task<IActionResult> IzledimYap(int id, MedyaKategori kategori, string dil = "tr", int? degerlendirmeSeviyesi = null)
     {
         var lang = NormalizeLang(dil);
         var userId = GetCurrentUserId();
@@ -193,7 +193,21 @@ public class HomeController : Controller
             return RedirectToAction(nameof(Index), new { lang, kategori });
         }
 
+        var level = NormalizeDegerlendirmeSeviyesi(degerlendirmeSeviyesi);
+        if (level == 6)
+        {
+            var sameCategoryMuks = await _dbContext.MedyaOgeleri
+                .Where(x => x.AppUserId == userId.Value && x.Kategori == kategori && x.Id != kayit.Id && x.DegerlendirmeSeviyesi == 6)
+                .ToListAsync();
+
+            foreach (var row in sameCategoryMuks)
+            {
+                row.DegerlendirmeSeviyesi = 5;
+            }
+        }
+
         kayit.Izlendi = true;
+        kayit.DegerlendirmeSeviyesi = level;
         await _dbContext.SaveChangesAsync();
         return RedirectToAction(nameof(Index), new { lang, kategori });
     }
@@ -219,6 +233,7 @@ public class HomeController : Controller
         }
 
         kayit.Izlendi = false;
+        kayit.DegerlendirmeSeviyesi = null;
         await _dbContext.SaveChangesAsync();
         return RedirectToAction(nameof(Index), new { lang, kategori });
     }
@@ -1227,6 +1242,16 @@ public class HomeController : Controller
     private static string NormalizeLang(string? lang)
     {
         return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+    }
+
+    private static int NormalizeDegerlendirmeSeviyesi(int? level)
+    {
+        if (!level.HasValue)
+        {
+            return 4;
+        }
+
+        return Math.Clamp(level.Value, 1, 6);
     }
 
     private static string? CleanValue(string? value, int maxLength)

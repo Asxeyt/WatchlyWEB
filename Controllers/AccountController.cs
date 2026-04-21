@@ -426,7 +426,14 @@ public class AccountController : Controller
             .Select(g => new { Kategori = g.Key, Count = g.Count() })
             .ToListAsync();
 
+        var mukler = await _dbContext.MedyaOgeleri
+            .Where(x => x.AppUserId == user.Id && x.Izlendi && x.DegerlendirmeSeviyesi == 6)
+            .GroupBy(x => x.Kategori)
+            .Select(g => new { Kategori = g.Key, Ad = g.OrderByDescending(x => x.OlusturmaTarihi).Select(x => x.Ad).FirstOrDefault() })
+            .ToListAsync();
+
         int CountFor(MedyaKategori k) => watchedCounts.FirstOrDefault(x => x.Kategori == k)?.Count ?? 0;
+        string MukFor(MedyaKategori k) => mukler.FirstOrDefault(x => x.Kategori == k)?.Ad ?? "-";
 
         ViewData["Lang"] = currentLang;
         ViewData["BodyClass"] = "profile-page";
@@ -445,7 +452,19 @@ public class AccountController : Controller
             KitapCount = CountFor(MedyaKategori.Kitap),
             DiziCount = CountFor(MedyaKategori.Dizi),
             FilmCount = CountFor(MedyaKategori.Film),
-            OyunCount = CountFor(MedyaKategori.Oyun)
+            OyunCount = CountFor(MedyaKategori.Oyun),
+            CizgiFilmCount = CountFor(MedyaKategori.CizgiFilm),
+            CizgiRomanCount = CountFor(MedyaKategori.CizgiRoman),
+            WebtoonCount = CountFor(MedyaKategori.Webtoon),
+            AnimeMuk = MukFor(MedyaKategori.Anime),
+            MangaMuk = MukFor(MedyaKategori.Manga),
+            KitapMuk = MukFor(MedyaKategori.Kitap),
+            DiziMuk = MukFor(MedyaKategori.Dizi),
+            FilmMuk = MukFor(MedyaKategori.Film),
+            OyunMuk = MukFor(MedyaKategori.Oyun),
+            CizgiFilmMuk = MukFor(MedyaKategori.CizgiFilm),
+            CizgiRomanMuk = MukFor(MedyaKategori.CizgiRoman),
+            WebtoonMuk = MukFor(MedyaKategori.Webtoon)
         };
 
         return View(vm);
