@@ -52,6 +52,28 @@ body {
   color: var(--text-color) !important;
 }
 
+.watchly-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: 0.85rem;
+}
+
+.watchly-brand img {
+  width: 30px;
+  height: 30px;
+  object-fit: cover;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: #fff;
+}
+
+.watchly-brand span {
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+
 .settings-nav-link {
   display: inline-flex;
   align-items: center;

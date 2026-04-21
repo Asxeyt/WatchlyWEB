@@ -386,8 +386,7 @@ public class HomeController : Controller
         var best = suggestions.FirstOrDefault() ?? new CatalogSuggestionViewModel { Name = name };
         var extras = await FetchDetailExtrasAsync(kategori, name, lang);
 
-        var movieLike = kategori == MedyaKategori.Film || kategori == MedyaKategori.Dizi || kategori == MedyaKategori.CizgiFilm;
-        var trailer = FirstNonEmpty(extras.TrailerUrl, best.TrailerUrl, $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(name + " trailer")}");
+        var trailer = FirstNonEmpty(extras.TrailerUrl, best.TrailerUrl);
         var trailerEmbed = ToEmbedUrl(trailer);
         var isDirectVideo = IsDirectVideo(trailerEmbed);
 
@@ -432,7 +431,7 @@ public class HomeController : Controller
             OyuncuKartlari = extras.CastCards
         };
 
-        if (!movieLike && string.IsNullOrWhiteSpace(model.FragmanUrl))
+        if (string.IsNullOrWhiteSpace(model.FragmanUrl))
         {
             model.FragmanUrl = $"https://www.youtube.com/results?search_query={Uri.EscapeDataString(model.Ad + " trailer")}";
         }
@@ -465,6 +464,15 @@ public class HomeController : Controller
 
     private async Task<List<CatalogSuggestionViewModel>> BuildSimilarSuggestionsAsync(MedyaKategori kategori, string name, string? genre, string lang)
     {
+        if (kategori == MedyaKategori.Anime)
+        {
+            var anime = await BuildAnimeSimilarSuggestionsAsync(name, lang);
+            if (anime.Count > 0)
+            {
+                return anime;
+            }
+        }
+
         var genreToken = (genre ?? string.Empty)
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .FirstOrDefault();
@@ -481,6 +489,81 @@ public class HomeController : Controller
         return await SearchByCategoryAsync(kategori, BuildSimilarQuery(name), lang);
     }
 
+    private async Task<List<CatalogSuggestionViewModel>> BuildAnimeSimilarSuggestionsAsync(string name, string lang)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        try
+        {
+            var searchUrl = $"https://api.jikan.moe/v4/anime?q={Uri.EscapeDataString(name)}&limit=1&sfw=true";
+            await using var searchStream = await client.GetStreamAsync(searchUrl);
+            using var searchDoc = await JsonDocument.ParseAsync(searchStream);
+            if (!searchDoc.RootElement.TryGetProperty("data", out var items) ||
+                items.ValueKind != JsonValueKind.Array ||
+                items.GetArrayLength() == 0)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var first = items[0];
+            if (!first.TryGetProperty("mal_id", out var malIdEl) || malIdEl.ValueKind != JsonValueKind.Number)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var malId = malIdEl.GetInt32();
+            var recUrl = $"https://api.jikan.moe/v4/anime/{malId}/recommendations";
+            await using var recStream = await client.GetStreamAsync(recUrl);
+            using var recDoc = await JsonDocument.ParseAsync(recStream);
+            if (!recDoc.RootElement.TryGetProperty("data", out var recItems) || recItems.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var rec in recItems.EnumerateArray().Take(18))
+            {
+                if (!rec.TryGetProperty("entry", out var entry))
+                {
+                    continue;
+                }
+
+                var title = entry.TryGetProperty("title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var poster = string.Empty;
+                if (entry.TryGetProperty("images", out var imgs) &&
+                    imgs.TryGetProperty("jpg", out var jpg) &&
+                    jpg.TryGetProperty("image_url", out var iu))
+                {
+                    poster = iu.GetString() ?? string.Empty;
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    Genre = string.Empty,
+                    Summary = string.Empty,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty
+                });
+            }
+
+            if (list.Count > 0)
+            {
+                return await LocalizeCatalogItemsAsync(list, lang);
+            }
+
+            return new List<CatalogSuggestionViewModel>();
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
     private async Task<DetailExtras> FetchDetailExtrasAsync(MedyaKategori kategori, string name, string lang)
     {
         return kategori switch
@@ -490,6 +573,9 @@ public class HomeController : Controller
             MedyaKategori.CizgiFilm => await FetchTvExtrasAsync(name, lang),
             MedyaKategori.Oyun => await FetchGameExtrasAsync(name, lang),
             MedyaKategori.Anime => await FetchAnimeExtrasAsync(name),
+            MedyaKategori.Kitap => await FetchBookExtrasAsync(name),
+            MedyaKategori.CizgiRoman => await FetchBookExtrasAsync(name),
+            MedyaKategori.Webtoon => await FetchBookExtrasAsync(name),
             _ => new DetailExtras()
         };
     }
@@ -815,9 +901,11 @@ public class HomeController : Controller
                     extras.Genre = data.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
                         ? string.Join(", ", gs.EnumerateArray().Take(4).Select(x => x.TryGetProperty("name", out var n) ? n.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
                         : string.Empty;
-                    if (data.TryGetProperty("trailer", out var tr) && tr.TryGetProperty("url", out var url))
+                    if (data.TryGetProperty("trailer", out var tr))
                     {
-                        extras.TrailerUrl = url.GetString() ?? string.Empty;
+                        var embed = tr.TryGetProperty("embed_url", out var eu) ? (eu.GetString() ?? string.Empty) : string.Empty;
+                        var raw = tr.TryGetProperty("url", out var url) ? (url.GetString() ?? string.Empty) : string.Empty;
+                        extras.TrailerUrl = FirstNonEmpty(embed, raw);
                     }
                     if (data.TryGetProperty("images", out var images) &&
                         images.TryGetProperty("jpg", out var jpg) &&
@@ -837,9 +925,11 @@ public class HomeController : Controller
             {
                 if (cdoc.RootElement.TryGetProperty("data", out var chars) && chars.ValueKind == JsonValueKind.Array)
                 {
-                    var cards = new List<MedyaKisiKartViewModel>();
-                    foreach (var ch in chars.EnumerateArray().Take(10))
+                    var ordered = new List<(bool main, int fav, MedyaKisiKartViewModel card)>();
+                    foreach (var ch in chars.EnumerateArray())
                     {
+                        var roleType = ch.TryGetProperty("role", out var roleEl) ? (roleEl.GetString() ?? string.Empty) : string.Empty;
+                        var isMain = string.Equals(roleType, "Main", StringComparison.OrdinalIgnoreCase);
                         var charName = ch.TryGetProperty("character", out var character) && character.TryGetProperty("name", out var cn)
                             ? (cn.GetString() ?? string.Empty)
                             : string.Empty;
@@ -848,30 +938,153 @@ public class HomeController : Controller
                             continue;
                         }
 
-                        var voice = ch.TryGetProperty("voice_actors", out var vas) && vas.ValueKind == JsonValueKind.Array && vas.GetArrayLength() > 0
-                            ? (vas[0].TryGetProperty("person", out var p) && p.TryGetProperty("name", out var pn) ? (pn.GetString() ?? string.Empty) : string.Empty)
+                        var voiceActors = ch.TryGetProperty("voice_actors", out var vas) && vas.ValueKind == JsonValueKind.Array
+                            ? vas
+                            : default;
+                        var va = default(JsonElement);
+                        var hasVa = false;
+                        if (voiceActors.ValueKind == JsonValueKind.Array && voiceActors.GetArrayLength() > 0)
+                        {
+                            foreach (var actor in voiceActors.EnumerateArray())
+                            {
+                                var langEl = actor.TryGetProperty("language", out var l) ? (l.GetString() ?? string.Empty) : string.Empty;
+                                if (string.Equals(langEl, "Japanese", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    va = actor;
+                                    hasVa = true;
+                                    break;
+                                }
+                            }
+
+                            if (!hasVa)
+                            {
+                                va = voiceActors[0];
+                                hasVa = true;
+                            }
+                        }
+
+                        var voice = hasVa && va.TryGetProperty("person", out var p) && p.TryGetProperty("name", out var pn)
+                            ? (pn.GetString() ?? string.Empty)
                             : string.Empty;
-                        var img = ch.TryGetProperty("character", out var character2) &&
-                                  character2.TryGetProperty("images", out var im) &&
-                                  im.TryGetProperty("jpg", out var jpg) &&
-                                  jpg.TryGetProperty("image_url", out var iu)
+
+                        var vaImg = hasVa &&
+                                    va.TryGetProperty("person", out var vp) &&
+                                    vp.TryGetProperty("images", out var vim) &&
+                                    vim.TryGetProperty("jpg", out var vjpg) &&
+                                    vjpg.TryGetProperty("image_url", out var viu)
+                            ? (viu.GetString() ?? string.Empty)
+                            : string.Empty;
+
+                        var fav = ch.TryGetProperty("character", out var character2) &&
+                                  character2.TryGetProperty("favorites", out var fEl) &&
+                                  fEl.ValueKind == JsonValueKind.Number
+                            ? fEl.GetInt32()
+                            : 0;
+
+                        var charImg = ch.TryGetProperty("character", out var character2b) &&
+                                      character2b.TryGetProperty("images", out var im) &&
+                                      im.TryGetProperty("jpg", out var jpg) &&
+                                      jpg.TryGetProperty("image_url", out var iu)
                             ? (iu.GetString() ?? string.Empty)
                             : string.Empty;
 
-                        cards.Add(new MedyaKisiKartViewModel
+                        var card = new MedyaKisiKartViewModel
                         {
-                            Ad = charName,
-                            Rol = string.IsNullOrWhiteSpace(voice) ? "Character" : $"Character / VA: {voice}",
-                            FotografUrl = NormalizePosterUrl(img) ?? string.Empty
-                        });
+                            Ad = string.IsNullOrWhiteSpace(voice) ? charName : voice,
+                            Rol = string.IsNullOrWhiteSpace(voice) ? charName : charName,
+                            FotografUrl = NormalizePosterUrl(FirstNonEmpty(vaImg, charImg)) ?? string.Empty
+                        };
+
+                        ordered.Add((isMain, fav, card));
                     }
 
+                    var cards = ordered
+                        .OrderByDescending(x => x.main)
+                        .ThenByDescending(x => x.fav)
+                        .Select(x => x.card)
+                        .Take(10)
+                        .ToList();
+
                     extras.CastCards = cards;
-                    extras.Cast = string.Join(", ", cards.Select(x => x.Ad).Take(8));
+                    extras.Cast = string.Join(", ", cards.Select(x => x.Rol).Where(x => !string.IsNullOrWhiteSpace(x)).Take(8));
                 }
             }
 
             return extras;
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
+    }
+
+    private async Task<DetailExtras> FetchBookExtrasAsync(string name)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url = $"https://openlibrary.org/search.json?title={Uri.EscapeDataString(name)}&limit=1";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("docs", out var docs) ||
+                docs.ValueKind != JsonValueKind.Array ||
+                docs.GetArrayLength() == 0)
+            {
+                return new DetailExtras();
+            }
+
+            var first = docs[0];
+            var year = first.TryGetProperty("first_publish_year", out var y) && y.ValueKind == JsonValueKind.Number
+                ? y.GetInt32().ToString()
+                : string.Empty;
+            var author = first.TryGetProperty("author_name", out var an) && an.ValueKind == JsonValueKind.Array && an.GetArrayLength() > 0
+                ? (an[0].GetString() ?? string.Empty)
+                : string.Empty;
+            var subject = first.TryGetProperty("subject", out var s) && s.ValueKind == JsonValueKind.Array
+                ? string.Join(", ", s.EnumerateArray().Take(3).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)))
+                : string.Empty;
+            var summary = first.TryGetProperty("first_sentence", out var fs)
+                ? fs.ValueKind == JsonValueKind.Array ? (fs.GetArrayLength() > 0 ? (fs[0].GetString() ?? string.Empty) : string.Empty) : (fs.GetString() ?? string.Empty)
+                : string.Empty;
+
+            var cover = string.Empty;
+            if (first.TryGetProperty("cover_i", out var ci) && ci.ValueKind == JsonValueKind.Number)
+            {
+                cover = $"https://covers.openlibrary.org/b/id/{ci.GetInt32()}-L.jpg";
+            }
+
+            var authorPhoto = string.Empty;
+            if (first.TryGetProperty("author_key", out var ak) && ak.ValueKind == JsonValueKind.Array && ak.GetArrayLength() > 0)
+            {
+                var key = ak[0].GetString() ?? string.Empty;
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    authorPhoto = $"https://covers.openlibrary.org/a/olid/{key}-M.jpg";
+                }
+            }
+
+            var cards = new List<MedyaKisiKartViewModel>();
+            if (!string.IsNullOrWhiteSpace(author))
+            {
+                cards.Add(new MedyaKisiKartViewModel
+                {
+                    Ad = author,
+                    Rol = "Yazar",
+                    FotografUrl = NormalizePosterUrl(authorPhoto) ?? string.Empty
+                });
+            }
+
+            return new DetailExtras
+            {
+                Summary = summary,
+                Genre = subject,
+                ReleaseDate = year,
+                Creator = "OpenLibrary",
+                Cast = author,
+                Images = string.IsNullOrWhiteSpace(cover) ? new List<string>() : new List<string> { cover },
+                CastCards = cards
+            };
         }
         catch
         {
@@ -900,35 +1113,58 @@ public class HomeController : Controller
             return string.Empty;
         }
 
-        if (u.Contains("youtube.com/watch", StringComparison.OrdinalIgnoreCase))
+        if (IsDirectVideo(u))
         {
-            var idx = u.IndexOf("v=", StringComparison.OrdinalIgnoreCase);
-            if (idx >= 0)
-            {
-                var id = u[(idx + 2)..];
-                var amp = id.IndexOf('&');
-                if (amp >= 0)
-                {
-                    id = id[..amp];
-                }
+            return u;
+        }
 
-                return $"https://www.youtube.com/embed/{id}";
+        if (!Uri.TryCreate(u, UriKind.Absolute, out var uri))
+        {
+            return string.Empty;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+        if (host.Contains("youtube.com") || host.Contains("youtu.be") || host.Contains("youtube-nocookie.com"))
+        {
+            var id = ExtractYoutubeVideoId(uri);
+            if (!string.IsNullOrWhiteSpace(id))
+            {
+                return $"https://www.youtube-nocookie.com/embed/{id}?rel=0";
             }
         }
 
-        if (u.Contains("youtu.be/", StringComparison.OrdinalIgnoreCase))
-        {
-            var id = u[(u.LastIndexOf('/') + 1)..];
-            return $"https://www.youtube.com/embed/{id}";
-        }
-
-        return u;
+        return string.Empty;
     }
 
     private static bool IsDirectVideo(string? url)
     {
         var u = (url ?? string.Empty).ToLowerInvariant();
         return u.EndsWith(".mp4") || u.EndsWith(".webm") || u.Contains(".mp4?");
+    }
+
+    private static string ExtractYoutubeVideoId(Uri uri)
+    {
+        var host = uri.Host.ToLowerInvariant();
+        if (host.Contains("youtu.be"))
+        {
+            return uri.AbsolutePath.Trim('/').Split('/').FirstOrDefault() ?? string.Empty;
+        }
+
+        if (uri.AbsolutePath.StartsWith("/embed/", StringComparison.OrdinalIgnoreCase))
+        {
+            return uri.AbsolutePath["/embed/".Length..].Split('/').FirstOrDefault() ?? string.Empty;
+        }
+
+        if (uri.AbsolutePath.StartsWith("/shorts/", StringComparison.OrdinalIgnoreCase))
+        {
+            return uri.AbsolutePath["/shorts/".Length..].Split('/').FirstOrDefault() ?? string.Empty;
+        }
+
+        var query = uri.Query.TrimStart('?')
+            .Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Select(x => x.Split('=', 2))
+            .FirstOrDefault(x => x.Length == 2 && x[0].Equals("v", StringComparison.OrdinalIgnoreCase));
+        return query?.Length == 2 ? Uri.UnescapeDataString(query[1]) : string.Empty;
     }
 
     private class DetailExtras
@@ -1993,7 +2229,7 @@ public class HomeController : Controller
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.TryAddWithoutValidation("User-Agent", "KategoriSecici/1.0");
+            req.Headers.TryAddWithoutValidation("User-Agent", "Watchly/1.0");
             using var res = await client.SendAsync(req);
             if (!res.IsSuccessStatusCode)
             {

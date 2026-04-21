@@ -19,7 +19,9 @@
 
     bool oyun = Model.Kategori == MedyaKategori.Oyun;
     bool kitap = Model.Kategori == MedyaKategori.Kitap || Model.Kategori == MedyaKategori.CizgiRoman || Model.Kategori == MedyaKategori.Webtoon;
-    bool oyuncuGoster = !oyun && !kitap;
+    bool anime = Model.Kategori == MedyaKategori.Anime;
+    bool kisiMetinGoster = !oyun;
+    string kisiBaslik = anime ? T("Ses Kadrosu", "Voice Cast") : (kitap ? T("Yazar", "Author") : T("Oyuncular", "Cast"));
     string doneText = Model.Kategori switch
     {
         MedyaKategori.Oyun => T("Oynadim", "Played"),
@@ -133,9 +135,9 @@
                 }
                 <div><strong>@T("Yayin Tarihi", "Release Date"):</strong> @(string.IsNullOrWhiteSpace(Model.YayinTarihi) ? T("Bilgi yok", "No data") : Model.YayinTarihi)</div>
                 <div><strong>@T("Yapimci", "Producer/Studio"):</strong> @(string.IsNullOrWhiteSpace(Model.Yapimci) ? T("Bilgi yok", "No data") : Model.Yapimci)</div>
-                @if (oyuncuGoster)
+                @if (kisiMetinGoster)
                 {
-                    <div><strong>@T("Oyuncular", "Cast"):</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
+                    <div><strong>@kisiBaslik:</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
                 }
             </div>
 
@@ -161,10 +163,10 @@
         </div>
     }
 
-    @if (oyuncuGoster && Model.OyuncuKartlari.Count > 0)
+    @if (!oyun && Model.OyuncuKartlari.Count > 0)
     {
         <div class="media-detail-similar">
-            <h2>@T("Oyuncu Kadrosu", "Cast")</h2>
+            <h2>@kisiBaslik</h2>
             <div class="media-cast-grid">
                 @foreach (var p in Model.OyuncuKartlari)
                 {
