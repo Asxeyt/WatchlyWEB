@@ -649,8 +649,13 @@ html[data-theme='light'] .category-list-card h2 {
 }
 
 html[data-theme='dark'] .category-list-card .media-item-title a,
-html[data-theme='light'] .category-list-card .media-item-title a {
+html[data-theme='dark'] .watched-panel .media-item-title a {
   color: #ffffff !important;
+}
+
+html[data-theme='light'] .category-list-card .media-item-title a,
+html[data-theme='light'] .watched-panel .media-item-title a {
+  color: #111827 !important;
 }
 
 html[data-theme='light'] .random-result-card h2 {

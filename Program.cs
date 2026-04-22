@@ -272,6 +272,18 @@ static void ApplySqliteLegacyFixes(AppDbContext db)
         );
         """);
 
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS AppUserMedias (
+            AppUserId INTEGER PRIMARY KEY,
+            AvatarBytes BLOB NULL,
+            AvatarContentType TEXT NULL,
+            CoverBytes BLOB NULL,
+            CoverContentType TEXT NULL,
+            UpdatedAt TEXT NOT NULL,
+            FOREIGN KEY (AppUserId) REFERENCES AppUsers(Id) ON DELETE CASCADE
+        );
+        """);
+
     db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_AppUsers_Email ON AppUsers (Email);");
     db.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IF NOT EXISTS IX_AppUsers_UserName ON AppUsers (UserName);");
 
@@ -432,6 +444,17 @@ static void ApplyPostgresLegacyFixes(AppDbContext db)
         ADD COLUMN IF NOT EXISTS "AvatarZoom" double precision NOT NULL DEFAULT 1.0,
         ADD COLUMN IF NOT EXISTS "AvatarPosX" integer NOT NULL DEFAULT 50,
         ADD COLUMN IF NOT EXISTS "AvatarPosY" integer NOT NULL DEFAULT 50;
+        """);
+
+    db.Database.ExecuteSqlRaw("""
+        CREATE TABLE IF NOT EXISTS "AppUserMedias" (
+            "AppUserId" integer PRIMARY KEY,
+            "AvatarBytes" bytea NULL,
+            "AvatarContentType" character varying(120) NULL,
+            "CoverBytes" bytea NULL,
+            "CoverContentType" character varying(120) NULL,
+            "UpdatedAt" timestamp with time zone NOT NULL
+        );
         """);
 }
 

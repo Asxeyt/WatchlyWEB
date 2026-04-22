@@ -389,6 +389,11 @@ public class AccountController : Controller
 
         var userItems = await _dbContext.MedyaOgeleri.Where(x => x.AppUserId == user.Id).ToListAsync();
         _dbContext.MedyaOgeleri.RemoveRange(userItems);
+        var media = await _dbContext.AppUserMedias.FirstOrDefaultAsync(x => x.AppUserId == user.Id);
+        if (media is not null)
+        {
+            _dbContext.AppUserMedias.Remove(media);
+        }
         _dbContext.AppUsers.Remove(user);
         await _dbContext.SaveChangesAsync();
 
@@ -444,12 +449,20 @@ public class AccountController : Controller
         ViewData["Lang"] = currentLang;
         ViewData["BodyClass"] = "profile-page";
 
+        var media = await _dbContext.AppUserMedias.AsNoTracking().FirstOrDefaultAsync(x => x.AppUserId == user.Id);
+        var coverPath = string.IsNullOrWhiteSpace(user.CoverImagePath) && media?.CoverBytes is { Length: > 0 }
+            ? BuildProfileMediaUrl(user.Id, "cover", media.UpdatedAt)
+            : user.CoverImagePath;
+        var avatarPath = string.IsNullOrWhiteSpace(user.AvatarImagePath) && media?.AvatarBytes is { Length: > 0 }
+            ? BuildProfileMediaUrl(user.Id, "avatar", media.UpdatedAt)
+            : user.AvatarImagePath;
+
         var vm = new ProfileViewModel
         {
             Lang = currentLang,
             DisplayName = string.IsNullOrWhiteSpace(user.UserName) ? user.Email : user.UserName,
-            CoverImagePath = user.CoverImagePath,
-            AvatarImagePath = user.AvatarImagePath,
+            CoverImagePath = coverPath,
+            AvatarImagePath = avatarPath,
             AvatarZoom = user.AvatarZoom <= 0 ? 1.0 : user.AvatarZoom,
             AvatarPosX = Math.Clamp(user.AvatarPosX, 0, 100),
             AvatarPosY = Math.Clamp(user.AvatarPosY, 0, 100),
@@ -503,24 +516,37 @@ public class AccountController : Controller
             return RedirectToAction(nameof(Login), new { lang = currentLang });
         }
 
-        var userDir = Path.Combine(_environment.WebRootPath, "user-media", user.Id.ToString());
-        Directory.CreateDirectory(userDir);
+        var media = await _dbContext.AppUserMedias.FirstOrDefaultAsync(x => x.AppUserId == user.Id);
+        if (media is null)
+        {
+            media = new AppUserMedia
+            {
+                AppUserId = user.Id
+            };
+            _dbContext.AppUserMedias.Add(media);
+        }
 
         if (coverFile is not null && coverFile.Length > 0)
         {
-            var coverPath = await SaveImageAsync(coverFile, userDir, "cover");
-            if (coverPath is not null)
+            var coverData = await ReadImageDataAsync(coverFile);
+            if (coverData is not null)
             {
-                user.CoverImagePath = $"/user-media/{user.Id}/{coverPath}";
+                media.CoverBytes = coverData.Value.Bytes;
+                media.CoverContentType = coverData.Value.ContentType;
+                media.UpdatedAt = DateTime.UtcNow;
+                user.CoverImagePath = BuildProfileMediaUrl(user.Id, "cover", media.UpdatedAt);
             }
         }
 
         if (avatarFile is not null && avatarFile.Length > 0)
         {
-            var avatarPath = await SaveImageAsync(avatarFile, userDir, "avatar");
-            if (avatarPath is not null)
+            var avatarData = await ReadImageDataAsync(avatarFile);
+            if (avatarData is not null)
             {
-                user.AvatarImagePath = $"/user-media/{user.Id}/{avatarPath}";
+                media.AvatarBytes = avatarData.Value.Bytes;
+                media.AvatarContentType = avatarData.Value.ContentType;
+                media.UpdatedAt = DateTime.UtcNow;
+                user.AvatarImagePath = BuildProfileMediaUrl(user.Id, "avatar", media.UpdatedAt);
             }
         }
 
@@ -541,6 +567,41 @@ public class AccountController : Controller
 
         await _dbContext.SaveChangesAsync();
         return RedirectToAction(nameof(Profile), new { lang = currentLang });
+    }
+
+    [Authorize]
+    [HttpGet]
+    public async Task<IActionResult> ProfileMedia(int? userId = null, string type = "avatar")
+    {
+        var currentUserId = userId ?? GetCurrentUserId();
+        if (currentUserId is null)
+        {
+            return NotFound();
+        }
+
+        var media = await _dbContext.AppUserMedias.AsNoTracking().FirstOrDefaultAsync(x => x.AppUserId == currentUserId.Value);
+        if (media is null)
+        {
+            return NotFound();
+        }
+
+        var wantsCover = string.Equals(type, "cover", StringComparison.OrdinalIgnoreCase);
+        if (wantsCover)
+        {
+            if (media.CoverBytes is not { Length: > 0 })
+            {
+                return NotFound();
+            }
+
+            return File(media.CoverBytes, SanitizeImageContentType(media.CoverContentType));
+        }
+
+        if (media.AvatarBytes is not { Length: > 0 })
+        {
+            return NotFound();
+        }
+
+        return File(media.AvatarBytes, SanitizeImageContentType(media.AvatarContentType));
     }
 
     private async Task SignInAsync(AppUser user, bool rememberMe)
@@ -596,7 +657,7 @@ public class AccountController : Controller
         return RedirectToAction(nameof(Profile), new { lang });
     }
 
-    private static async Task<string?> SaveImageAsync(IFormFile file, string directory, string baseName)
+    private static async Task<(byte[] Bytes, string ContentType)?> ReadImageDataAsync(IFormFile file)
     {
         var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
         var allowed = new HashSet<string> { ".jpg", ".jpeg", ".png", ".webp" };
@@ -610,11 +671,34 @@ public class AccountController : Controller
             return null;
         }
 
-        var fileName = $"{baseName}{ext}";
-        var fullPath = Path.Combine(directory, fileName);
-        await using var stream = new FileStream(fullPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        await using var stream = new MemoryStream();
         await file.CopyToAsync(stream);
-        return fileName;
+        return (stream.ToArray(), file.ContentType ?? "image/jpeg");
+    }
+
+    private static string BuildProfileMediaUrl(int userId, string type, DateTime updatedAtUtc)
+    {
+        var safeType = string.Equals(type, "cover", StringComparison.OrdinalIgnoreCase) ? "cover" : "avatar";
+        var version = new DateTimeOffset(updatedAtUtc).ToUnixTimeSeconds();
+        return $"/Account/ProfileMedia?userId={userId}&type={safeType}&v={version}";
+    }
+
+    private static string SanitizeImageContentType(string? contentType)
+    {
+        if (string.IsNullOrWhiteSpace(contentType))
+        {
+            return "image/jpeg";
+        }
+
+        var allowed = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "image/jpeg",
+            "image/jpg",
+            "image/png",
+            "image/webp"
+        };
+
+        return allowed.Contains(contentType) ? contentType : "image/jpeg";
     }
 
     private static string NormalizeUserName(string? value)
