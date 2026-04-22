@@ -400,6 +400,39 @@ public class HomeController : Controller
         var suggestions = await SearchByCategoryAsync(kategori, name, lang);
         var best = suggestions.FirstOrDefault() ?? new CatalogSuggestionViewModel { Name = name };
         var extras = await FetchDetailExtrasAsync(kategori, name, lang);
+        if (NeedsExtraFallback(kategori, extras) &&
+            !string.IsNullOrWhiteSpace(best.Name) &&
+            !string.Equals(best.Name, name, StringComparison.OrdinalIgnoreCase))
+        {
+            var byBestName = await FetchDetailExtrasAsync(kategori, best.Name, lang);
+            extras = MergeExtras(extras, byBestName);
+        }
+
+        if (NeedsExtraFallback(kategori, extras))
+        {
+            var altNames = suggestions
+                .Select(x => x.Name?.Trim())
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Where(x => !string.Equals(x, name, StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(4)
+                .ToList();
+
+            foreach (var alt in altNames)
+            {
+                if (string.IsNullOrWhiteSpace(alt))
+                {
+                    continue;
+                }
+
+                var byAlt = await FetchDetailExtrasAsync(kategori, alt, lang);
+                extras = MergeExtras(extras, byAlt);
+                if (!NeedsExtraFallback(kategori, extras))
+                {
+                    break;
+                }
+            }
+        }
 
         var trailer = FirstNonEmpty(extras.TrailerUrl, best.TrailerUrl);
         var trailerEmbed = ToEmbedUrl(trailer);
@@ -482,9 +515,12 @@ public class HomeController : Controller
         if (kategori == MedyaKategori.Anime)
         {
             var anime = await BuildAnimeSimilarSuggestionsAsync(name, lang);
-            if (anime.Count > 0)
+            var animeFiltered = anime
+                .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (animeFiltered.Count > 0)
             {
-                return anime;
+                return animeFiltered;
             }
         }
 
@@ -495,13 +531,69 @@ public class HomeController : Controller
         if (!string.IsNullOrWhiteSpace(genreToken))
         {
             var byGenre = await SearchByCategoryAsync(kategori, genreToken, lang);
-            if (byGenre.Count > 0)
+            var byGenreFiltered = byGenre
+                .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (byGenreFiltered.Count > 0)
             {
-                return byGenre;
+                return byGenreFiltered;
             }
         }
 
-        return await SearchByCategoryAsync(kategori, BuildSimilarQuery(name), lang);
+        var byName = await SearchByCategoryAsync(kategori, BuildSimilarQuery(name), lang);
+        var byNameFiltered = byName
+            .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (byNameFiltered.Count > 0)
+        {
+            return byNameFiltered;
+        }
+
+        var tokens = name
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(x => x.Length >= 3)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+
+        foreach (var token in tokens)
+        {
+            var byToken = await SearchByCategoryAsync(kategori, token, lang);
+            var byTokenFiltered = byToken
+                .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            if (byTokenFiltered.Count > 0)
+            {
+                return byTokenFiltered;
+            }
+        }
+
+        var fallbackQuery = kategori switch
+        {
+            MedyaKategori.Film => "movie",
+            MedyaKategori.Dizi => "series",
+            MedyaKategori.Oyun => "action",
+            MedyaKategori.Manga => "manga",
+            MedyaKategori.Kitap => "book",
+            MedyaKategori.CizgiFilm => "animation",
+            MedyaKategori.CizgiRoman => "comic",
+            MedyaKategori.Webtoon => "webtoon",
+            _ => "top"
+        };
+        var byFallback = await SearchByCategoryAsync(kategori, fallbackQuery, lang);
+        var byFallbackFiltered = byFallback
+            .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (byFallbackFiltered.Count > 0)
+        {
+            return byFallbackFiltered;
+        }
+
+        var universalFallback = kategori == MedyaKategori.Oyun ? "top seller" : "top rated";
+        var byUniversal = await SearchByCategoryAsync(kategori, universalFallback, lang);
+        return byUniversal
+            .Where(x => !string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase))
+            .ToList();
     }
 
     private async Task<List<CatalogSuggestionViewModel>> BuildAnimeSimilarSuggestionsAsync(string name, string lang)
@@ -588,11 +680,77 @@ public class HomeController : Controller
             MedyaKategori.CizgiFilm => await FetchTvExtrasAsync(name, lang),
             MedyaKategori.Oyun => await FetchGameExtrasAsync(name, lang),
             MedyaKategori.Anime => await FetchAnimeExtrasAsync(name),
+            MedyaKategori.Manga => await FetchMangaExtrasAsync(name),
             MedyaKategori.Kitap => await FetchBookExtrasAsync(name),
             MedyaKategori.CizgiRoman => await FetchBookExtrasAsync(name),
             MedyaKategori.Webtoon => await FetchBookExtrasAsync(name),
             _ => new DetailExtras()
         };
+    }
+
+    private async Task<DetailExtras> FetchMangaExtrasAsync(string name)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var searchUrl = $"https://api.jikan.moe/v4/manga?q={Uri.EscapeDataString(name)}&limit=1&sfw=true";
+        try
+        {
+            await using var stream = await client.GetStreamAsync(searchUrl);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var items) ||
+                items.ValueKind != JsonValueKind.Array ||
+                items.GetArrayLength() == 0)
+            {
+                return new DetailExtras();
+            }
+
+            var first = items[0];
+            if (!first.TryGetProperty("mal_id", out var idEl) || idEl.ValueKind != JsonValueKind.Number)
+            {
+                return new DetailExtras();
+            }
+
+            var malId = idEl.GetInt32();
+            var fullUrl = $"https://api.jikan.moe/v4/manga/{malId}/full";
+            await using var fstream = await client.GetStreamAsync(fullUrl);
+            using var fdoc = await JsonDocument.ParseAsync(fstream);
+            if (!fdoc.RootElement.TryGetProperty("data", out var data))
+            {
+                return new DetailExtras();
+            }
+
+            var creator = data.TryGetProperty("authors", out var authors) && authors.ValueKind == JsonValueKind.Array
+                ? string.Join(", ", authors.EnumerateArray().Take(3).Select(x => x.TryGetProperty("name", out var n) ? n.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
+                : string.Empty;
+
+            var genre = data.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                ? string.Join(", ", gs.EnumerateArray().Take(4).Select(x => x.TryGetProperty("name", out var n) ? n.GetString() : null).Where(x => !string.IsNullOrWhiteSpace(x)))
+                : string.Empty;
+
+            var release = data.TryGetProperty("published", out var pub) && pub.TryGetProperty("from", out var from)
+                ? (from.GetString() ?? string.Empty)
+                : string.Empty;
+
+            var summary = data.TryGetProperty("synopsis", out var syn) ? (syn.GetString() ?? string.Empty) : string.Empty;
+            var image = data.TryGetProperty("images", out var images) &&
+                        images.TryGetProperty("jpg", out var jpg) &&
+                        jpg.TryGetProperty("large_image_url", out var img)
+                ? (img.GetString() ?? string.Empty)
+                : string.Empty;
+
+            return new DetailExtras
+            {
+                Summary = summary,
+                Genre = genre,
+                ReleaseDate = release,
+                Creator = creator,
+                Images = string.IsNullOrWhiteSpace(image) ? new List<string>() : new List<string> { NormalizePosterUrl(image) ?? image }
+            };
+        }
+        catch
+        {
+            return new DetailExtras();
+        }
     }
 
     private async Task<DetailExtras> FetchMovieExtrasAsync(string name)
@@ -1192,6 +1350,34 @@ public class HomeController : Controller
         public string TrailerUrl { get; set; } = string.Empty;
         public List<string> Images { get; set; } = new();
         public List<MedyaKisiKartViewModel> CastCards { get; set; } = new();
+    }
+
+    private static bool NeedsExtraFallback(MedyaKategori kategori, DetailExtras extras)
+    {
+        return kategori switch
+        {
+            MedyaKategori.Film or MedyaKategori.Dizi or MedyaKategori.CizgiFilm =>
+                string.IsNullOrWhiteSpace(extras.ReleaseDate) || string.IsNullOrWhiteSpace(extras.Creator) || extras.CastCards.Count == 0,
+            MedyaKategori.Manga =>
+                string.IsNullOrWhiteSpace(extras.ReleaseDate) || string.IsNullOrWhiteSpace(extras.Creator),
+            _ => string.IsNullOrWhiteSpace(extras.Summary)
+        };
+    }
+
+    private static DetailExtras MergeExtras(DetailExtras a, DetailExtras b)
+    {
+        var merged = new DetailExtras
+        {
+            Summary = string.IsNullOrWhiteSpace(a.Summary) ? b.Summary : a.Summary,
+            Genre = string.IsNullOrWhiteSpace(a.Genre) ? b.Genre : a.Genre,
+            ReleaseDate = string.IsNullOrWhiteSpace(a.ReleaseDate) ? b.ReleaseDate : a.ReleaseDate,
+            Creator = string.IsNullOrWhiteSpace(a.Creator) ? b.Creator : a.Creator,
+            Cast = string.IsNullOrWhiteSpace(a.Cast) ? b.Cast : a.Cast,
+            TrailerUrl = string.IsNullOrWhiteSpace(a.TrailerUrl) ? b.TrailerUrl : a.TrailerUrl,
+            Images = a.Images.Count > 0 ? a.Images : b.Images,
+            CastCards = a.CastCards.Count > 0 ? a.CastCards : b.CastCards
+        };
+        return merged;
     }
 
     private async Task<AnaSayfaViewModel> BuildViewModelAsync(string? lang, MedyaKategori seciliKategori, int userId)

@@ -441,13 +441,13 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title">@T("Puanini sec", "Select your rating")</h5>
+        <h5 class="modal-title rating-modal-title">@T("Puanini sec", "Select your rating")</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form asp-action="IzledimYap" method="post">
         @Html.AntiForgeryToken()
         <div class="modal-body">
-          <p class="mb-2"><strong id="ratingItemName"></strong></p>
+          <p class="mb-2"><strong id="ratingItemName" class="rating-item-name"></strong></p>
           <input type="hidden" name="id" id="ratingItemId" />
           <input type="hidden" name="kategori" id="ratingKategori" />
           <input type="hidden" name="dil" id="ratingDil" />
@@ -461,7 +461,7 @@
             <button type="button" class="btn btn-outline-success text-start rating-level-btn" data-level="5">@T("5 - Cok Iyi", "5 - Very Good")</button>
             <button type="button" class="btn btn-outline-dark text-start rating-level-btn" data-level="6">@T("6 - MUK (Daha iyisi olamaz)", "6 - MUK (Perfect)")</button>
           </div>
-          <small class="text-muted d-block mt-2">@T("Not: Her kategoride yalnizca bir tane MUK olur.", "Note: Only one MUK is allowed per category.")</small>
+          <small class="text-muted d-block mt-2 rating-note">@T("Not: Her kategoride yalnizca bir tane MUK olur.", "Note: Only one MUK is allowed per category.")</small>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">@T("Vazgec", "Cancel")</button>
