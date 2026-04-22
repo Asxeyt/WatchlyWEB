@@ -1490,3 +1490,65 @@ html[data-theme='light'] .catalog-result-item:hover {
 .rating-level-btn.active {
   border-width: 2px;
 }
+
+.muk-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.8rem;
+}
+
+.muk-card {
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(2, 6, 23, 0.4);
+  padding: 0.6rem;
+  display: grid;
+  gap: 0.45rem;
+  justify-items: center;
+  text-align: center;
+}
+
+.muk-label {
+  font-size: 0.82rem;
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.muk-poster {
+  width: 100%;
+  max-width: 120px;
+  aspect-ratio: 2 / 3;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: #0b1222;
+}
+
+.muk-name {
+  font-size: 0.9rem;
+  font-weight: 700;
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+html[data-theme='dark'] .profile-future-space h2,
+html[data-theme='dark'] .muk-label,
+html[data-theme='dark'] .muk-name {
+  color: #000000 !important;
+}
+
+html[data-theme='dark'] .muk-card {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(0, 0, 0, 0.32);
+}
+
+html[data-theme='light'] .profile-future-space h2,
+html[data-theme='light'] .muk-label,
+html[data-theme='light'] .muk-name {
+  color: #ffffff !important;
+}
+
+html[data-theme='light'] .muk-card {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.28);
+}

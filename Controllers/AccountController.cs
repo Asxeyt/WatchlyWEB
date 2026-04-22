@@ -429,11 +429,17 @@ public class AccountController : Controller
         var mukler = await _dbContext.MedyaOgeleri
             .Where(x => x.AppUserId == user.Id && x.Izlendi && x.DegerlendirmeSeviyesi == 6)
             .GroupBy(x => x.Kategori)
-            .Select(g => new { Kategori = g.Key, Ad = g.OrderByDescending(x => x.OlusturmaTarihi).Select(x => x.Ad).FirstOrDefault() })
+            .Select(g => new
+            {
+                Kategori = g.Key,
+                Ad = g.OrderByDescending(x => x.OlusturmaTarihi).Select(x => x.Ad).FirstOrDefault(),
+                PosterUrl = g.OrderByDescending(x => x.OlusturmaTarihi).Select(x => x.PosterUrl).FirstOrDefault()
+            })
             .ToListAsync();
 
         int CountFor(MedyaKategori k) => watchedCounts.FirstOrDefault(x => x.Kategori == k)?.Count ?? 0;
         string MukFor(MedyaKategori k) => mukler.FirstOrDefault(x => x.Kategori == k)?.Ad ?? "-";
+        string? MukPosterFor(MedyaKategori k) => mukler.FirstOrDefault(x => x.Kategori == k)?.PosterUrl;
 
         ViewData["Lang"] = currentLang;
         ViewData["BodyClass"] = "profile-page";
@@ -457,14 +463,23 @@ public class AccountController : Controller
             CizgiRomanCount = CountFor(MedyaKategori.CizgiRoman),
             WebtoonCount = CountFor(MedyaKategori.Webtoon),
             AnimeMuk = MukFor(MedyaKategori.Anime),
+            AnimeMukPoster = MukPosterFor(MedyaKategori.Anime),
             MangaMuk = MukFor(MedyaKategori.Manga),
+            MangaMukPoster = MukPosterFor(MedyaKategori.Manga),
             KitapMuk = MukFor(MedyaKategori.Kitap),
+            KitapMukPoster = MukPosterFor(MedyaKategori.Kitap),
             DiziMuk = MukFor(MedyaKategori.Dizi),
+            DiziMukPoster = MukPosterFor(MedyaKategori.Dizi),
             FilmMuk = MukFor(MedyaKategori.Film),
+            FilmMukPoster = MukPosterFor(MedyaKategori.Film),
             OyunMuk = MukFor(MedyaKategori.Oyun),
+            OyunMukPoster = MukPosterFor(MedyaKategori.Oyun),
             CizgiFilmMuk = MukFor(MedyaKategori.CizgiFilm),
+            CizgiFilmMukPoster = MukPosterFor(MedyaKategori.CizgiFilm),
             CizgiRomanMuk = MukFor(MedyaKategori.CizgiRoman),
-            WebtoonMuk = MukFor(MedyaKategori.Webtoon)
+            CizgiRomanMukPoster = MukPosterFor(MedyaKategori.CizgiRoman),
+            WebtoonMuk = MukFor(MedyaKategori.Webtoon),
+            WebtoonMukPoster = MukPosterFor(MedyaKategori.Webtoon)
         };
 
         return View(vm);

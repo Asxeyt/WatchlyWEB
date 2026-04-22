@@ -90,16 +90,52 @@
 
     <div class="profile-future-space p-3">
         <h2 class="h5 mb-3">@T("Mukemmel Secimlerim (MUK)", "My Perfect Picks (MUK)")</h2>
-        <div class="profile-stats-grid">
-            <article class="profile-stat-card"><div class="profile-stat-label">Anime</div><div class="profile-stat-number">@Model.AnimeMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">Manga</div><div class="profile-stat-number">@Model.MangaMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Kitap", "Book")</div><div class="profile-stat-number">@Model.KitapMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Dizi", "Series")</div><div class="profile-stat-number">@Model.DiziMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Film", "Movie")</div><div class="profile-stat-number">@Model.FilmMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Oyun", "Game")</div><div class="profile-stat-number">@Model.OyunMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Cizgi Film", "Cartoon")</div><div class="profile-stat-number">@Model.CizgiFilmMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">@T("Cizgi Roman", "Comic")</div><div class="profile-stat-number">@Model.CizgiRomanMuk</div></article>
-            <article class="profile-stat-card"><div class="profile-stat-label">Webtoon</div><div class="profile-stat-number">@Model.WebtoonMuk</div></article>
+        <div class="muk-grid">
+            <article class="muk-card">
+                <div class="muk-label">Anime</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.AnimeMukPoster) ? "/images/watchly-logo.png" : Model.AnimeMukPoster)" alt="@Model.AnimeMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.AnimeMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">Manga</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.MangaMukPoster) ? "/images/watchly-logo.png" : Model.MangaMukPoster)" alt="@Model.MangaMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.MangaMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Kitap", "Book")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.KitapMukPoster) ? "/images/watchly-logo.png" : Model.KitapMukPoster)" alt="@Model.KitapMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.KitapMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Dizi", "Series")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.DiziMukPoster) ? "/images/watchly-logo.png" : Model.DiziMukPoster)" alt="@Model.DiziMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.DiziMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Film", "Movie")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.FilmMukPoster) ? "/images/watchly-logo.png" : Model.FilmMukPoster)" alt="@Model.FilmMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.FilmMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Oyun", "Game")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.OyunMukPoster) ? "/images/watchly-logo.png" : Model.OyunMukPoster)" alt="@Model.OyunMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.OyunMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Cizgi Film", "Cartoon")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.CizgiFilmMukPoster) ? "/images/watchly-logo.png" : Model.CizgiFilmMukPoster)" alt="@Model.CizgiFilmMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.CizgiFilmMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">@T("Cizgi Roman", "Comic")</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.CizgiRomanMukPoster) ? "/images/watchly-logo.png" : Model.CizgiRomanMukPoster)" alt="@Model.CizgiRomanMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.CizgiRomanMuk</div>
+            </article>
+            <article class="muk-card">
+                <div class="muk-label">Webtoon</div>
+                <img src="@(string.IsNullOrWhiteSpace(Model.WebtoonMukPoster) ? "/images/watchly-logo.png" : Model.WebtoonMukPoster)" alt="@Model.WebtoonMuk" class="muk-poster" loading="lazy" />
+                <div class="muk-name">@Model.WebtoonMuk</div>
+            </article>
         </div>
     </div>
 </section>

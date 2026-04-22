@@ -1213,7 +1213,7 @@ public class HomeController : Controller
         }
 
         var adetler = await _dbContext.MedyaOgeleri
-            .Where(x => x.AppUserId == userId)
+            .Where(x => x.AppUserId == userId && !x.Izlendi)
             .GroupBy(x => x.Kategori)
             .Select(g => new { Kategori = g.Key, Adet = g.Count() })
             .ToListAsync();
