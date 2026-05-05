@@ -1,0 +1,15 @@
+bin/
+obj/
+publish-test/
+tools/
+.git/
+.keys/
+*.log
+*.db
+*.db-shm
+*.db-wal
+app.err.log
+app.out.log
+tunnel.err.log
+tunnel.out.log
+
