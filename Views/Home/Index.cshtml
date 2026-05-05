@@ -441,7 +441,10 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title rating-modal-title">@T("Puanini sec", "Select your rating")</h5>
+        <div class="rating-modal-heading">
+          <h5 class="modal-title rating-modal-title">@T("Puanini sec", "Select your rating")</h5>
+          <img src="/images/rias-rating.png" alt="" class="rating-modal-character" loading="lazy" />
+        </div>
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <form asp-action="IzledimYap" method="post">
@@ -454,12 +457,12 @@
           <input type="hidden" name="degerlendirmeSeviyesi" id="ratingLevel" value="4" />
 
           <div class="d-grid gap-2">
-            <button type="button" class="btn btn-outline-danger text-start rating-level-btn" data-level="1">@T("1 - Cok Kotu", "1 - Very Bad")</button>
-            <button type="button" class="btn btn-outline-danger text-start rating-level-btn" data-level="2">@T("2 - Kotu", "2 - Bad")</button>
-            <button type="button" class="btn btn-outline-warning text-start rating-level-btn" data-level="3">@T("3 - Orta", "3 - Mid")</button>
-            <button type="button" class="btn btn-outline-primary text-start rating-level-btn active" data-level="4">@T("4 - Iyi", "4 - Good")</button>
-            <button type="button" class="btn btn-outline-success text-start rating-level-btn" data-level="5">@T("5 - Cok Iyi", "5 - Very Good")</button>
-            <button type="button" class="btn btn-outline-dark text-start rating-level-btn" data-level="6">@T("6 - MUK (Daha iyisi olamaz)", "6 - MUK (Perfect)")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-1" data-level="1">@T("Cok Kotu", "Very Bad")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-2" data-level="2">@T("Kotu", "Bad")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-3" data-level="3">@T("Orta", "Mid")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-4 active" data-level="4">@T("Iyi", "Good")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-5" data-level="5">@T("Cok Iyi", "Very Good")</button>
+            <button type="button" class="btn text-start rating-level-btn rating-level-6" data-level="6">@T("MUK (Daha iyisi olamaz)", "MUK (Perfect)")</button>
           </div>
           <small class="text-muted d-block mt-2 rating-note">@T("Not: Her kategoride yalnizca bir tane MUK olur.", "Note: Only one MUK is allowed per category.")</small>
         </div>
