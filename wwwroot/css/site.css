@@ -1502,14 +1502,53 @@ html[data-theme='light'] .catalog-result-item:hover {
   align-items: center;
   gap: 0.75rem;
   min-width: 0;
+  min-height: 36px;
+  padding-right: 120px;
 }
 
 .rating-modal-character {
-  width: 58px;
-  height: 58px;
+  position: absolute;
+  top: -92px;
+  right: 58px;
+  width: 154px;
+  height: auto;
+  max-height: 170px;
   object-fit: contain;
-  flex: 0 0 auto;
-  filter: drop-shadow(0 7px 10px rgba(15, 23, 42, 0.22));
+  z-index: 4;
+  pointer-events: none;
+  filter: drop-shadow(0 13px 12px rgba(15, 23, 42, 0.35));
+  transform: rotate(1.5deg);
+}
+
+#ratingModal .modal-dialog {
+  margin-top: 6.5rem;
+}
+
+#ratingModal .modal-content {
+  position: relative;
+  overflow: visible;
+}
+
+#ratingModal .modal-header {
+  position: relative;
+  overflow: visible;
+}
+
+#ratingModal .modal-header::after {
+  content: "";
+  position: absolute;
+  right: 48px;
+  bottom: -1px;
+  width: 170px;
+  height: 9px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(15, 23, 42, 0), rgba(15, 23, 42, 0.22), rgba(15, 23, 42, 0));
+  z-index: 3;
+}
+
+#ratingModal .btn-close {
+  position: relative;
+  z-index: 5;
 }
 
 .rating-level-btn {
@@ -1517,6 +1556,7 @@ html[data-theme='light'] .catalog-result-item:hover {
   font-weight: 700;
   color: #000000 !important;
   min-height: 40px;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, filter 0.16s ease;
 }
 
 .rating-level-btn.active {
@@ -1524,29 +1564,52 @@ html[data-theme='light'] .catalog-result-item:hover {
   box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.38);
 }
 
+.rating-level-btn:hover,
+.rating-level-btn:focus {
+  transform: translateX(4px) scale(1.01);
+  filter: saturate(1.15) brightness(1.04);
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+}
+
 .rating-level-1 {
-  background: #7f1d1d !important;
+  background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 55%, #b91c1c 100%) !important;
 }
 
 .rating-level-2 {
-  background: #ef4444 !important;
+  background: linear-gradient(135deg, #dc2626 0%, #ef4444 58%, #f87171 100%) !important;
 }
 
 .rating-level-3 {
-  background: #facc15 !important;
+  background: linear-gradient(135deg, #eab308 0%, #facc15 55%, #fde047 100%) !important;
 }
 
 .rating-level-4 {
-  background: #2563eb !important;
+  background: linear-gradient(135deg, #1d4ed8 0%, #2563eb 55%, #60a5fa 100%) !important;
 }
 
 .rating-level-5 {
-  background: #22c55e !important;
+  background: linear-gradient(135deg, #15803d 0%, #22c55e 55%, #86efac 100%) !important;
 }
 
 .rating-level-6 {
-  background: #000000 !important;
+  background: linear-gradient(135deg, #000000 0%, #111827 62%, #374151 100%) !important;
   color: #ffffff !important;
+}
+
+@media (max-width: 560px) {
+  .rating-modal-heading {
+    padding-right: 82px;
+  }
+
+  .rating-modal-character {
+    top: -68px;
+    right: 40px;
+    width: 112px;
+  }
+
+  #ratingModal .modal-dialog {
+    margin-top: 5rem;
+  }
 }
 
 .muk-grid {
