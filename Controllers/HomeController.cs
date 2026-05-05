@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Collections.Concurrent;
+using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using KategoriSecici.Data;
@@ -2766,20 +2767,289 @@ public class HomeController : Controller
 
     private async Task<List<CatalogSuggestionViewModel>> SearchWebtoonAsync(string query, string lang)
     {
+        var anilist = await SearchAniListWebtoonAsync(query);
+        var mangadex = await SearchMangaDexWebtoonAsync(query);
         var kitsu = await SearchKitsuMangaAsync(query);
         var jikan = await SearchJikanAsync(query, anime: false);
-        var local = new List<CatalogSuggestionViewModel>
-        {
-            new() { Name = "Solo Leveling", Genre = "Webtoon, Action, Fantasy", Summary = "Zayif bir avcinin guclenme hikayesi.", Score = "8.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/99/Solo_Leveling_Webtoon.png" },
-            new() { Name = "Tower of God", Genre = "Webtoon, Adventure, Fantasy", Summary = "Kulenin zirvesine cikmak isteyenlerin hikayesi.", Score = "8.5", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/thumb/7/7e/Tower_of_God_%28manhwa%29.jpg/330px-Tower_of_God_%28manhwa%29.jpg" },
-            new() { Name = "The God of High School", Genre = "Webtoon, Action", Summary = "Turnuvada mucadele eden genc dovusculer.", Score = "7.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/35/The_God_of_High_School.jpg" }
-        };
+        var google = (anilist.Count + mangadex.Count + kitsu.Count + jikan.Count) < 8
+            ? await SearchGoogleBooksAsync($"{query} webtoon manhwa webcomic", true, lang)
+            : new List<CatalogSuggestionViewModel>();
+        var local = SearchLocalWebtoons(query, lang);
 
-        var merged = kitsu.Concat(jikan).Concat(local)
+        var merged = anilist.Concat(mangadex).Concat(kitsu).Concat(jikan).Concat(google).Concat(local)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
             .ToList();
         return RankFuzzy(query, merged);
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchAniListWebtoonAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+
+        var graphQl = """
+            query ($search: String) {
+              Page(page: 1, perPage: 24) {
+                media(search: $search, type: MANGA, sort: SEARCH_MATCH, isAdult: false) {
+                  title { romaji english native }
+                  description(asHtml: false)
+                  coverImage { large medium }
+                  genres
+                  averageScore
+                  format
+                  countryOfOrigin
+                }
+              }
+            }
+            """;
+
+        try
+        {
+            var payload = JsonSerializer.Serialize(new
+            {
+                query = graphQl,
+                variables = new { search = query }
+            });
+
+            using var response = await client.PostAsync(
+                "https://graphql.anilist.co",
+                new StringContent(payload, Encoding.UTF8, "application/json"));
+
+            if (!response.IsSuccessStatusCode)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) ||
+                !data.TryGetProperty("Page", out var page) ||
+                !page.TryGetProperty("media", out var media) ||
+                media.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var item in media.EnumerateArray())
+            {
+                var title = string.Empty;
+                var altTitle = string.Empty;
+                if (item.TryGetProperty("title", out var titleObj))
+                {
+                    title = FirstNonEmpty(
+                        titleObj.TryGetProperty("english", out var en) ? en.GetString() : null,
+                        titleObj.TryGetProperty("romaji", out var ro) ? ro.GetString() : null,
+                        titleObj.TryGetProperty("native", out var na) ? na.GetString() : null);
+                    altTitle = FirstNonEmpty(
+                        titleObj.TryGetProperty("romaji", out var roAlt) ? roAlt.GetString() : null,
+                        titleObj.TryGetProperty("native", out var naAlt) ? naAlt.GetString() : null);
+                }
+
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var genres = item.TryGetProperty("genres", out var gs) && gs.ValueKind == JsonValueKind.Array
+                    ? string.Join(", ", gs.EnumerateArray().Take(4).Select(x => x.GetString()).Where(x => !string.IsNullOrWhiteSpace(x)))
+                    : string.Empty;
+                var score = item.TryGetProperty("averageScore", out var sc) && sc.ValueKind == JsonValueKind.Number
+                    ? (sc.GetInt32() / 10.0).ToString("0.0")
+                    : string.Empty;
+                var summary = item.TryGetProperty("description", out var desc) ? StripHtml(desc.GetString() ?? string.Empty) : string.Empty;
+                var poster = string.Empty;
+                if (item.TryGetProperty("coverImage", out var cover))
+                {
+                    poster = FirstNonEmpty(
+                        cover.TryGetProperty("large", out var large) ? large.GetString() : null,
+                        cover.TryGetProperty("medium", out var medium) ? medium.GetString() : null);
+                }
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = altTitle,
+                    Genre = string.IsNullOrWhiteSpace(genres) ? "Webtoon" : $"Webtoon, {genres}",
+                    Summary = summary,
+                    Score = score,
+                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private async Task<List<CatalogSuggestionViewModel>> SearchMangaDexWebtoonAsync(string query)
+    {
+        var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(8);
+        var url =
+            $"https://api.mangadex.org/manga?title={Uri.EscapeDataString(query)}&limit=24&includes[]=cover_art&contentRating[]=safe&contentRating[]=suggestive&order[relevance]=desc";
+
+        try
+        {
+            await using var stream = await client.GetStreamAsync(url);
+            using var doc = await JsonDocument.ParseAsync(stream);
+            if (!doc.RootElement.TryGetProperty("data", out var data) || data.ValueKind != JsonValueKind.Array)
+            {
+                return new List<CatalogSuggestionViewModel>();
+            }
+
+            var list = new List<CatalogSuggestionViewModel>();
+            foreach (var row in data.EnumerateArray())
+            {
+                var id = row.TryGetProperty("id", out var idEl) ? (idEl.GetString() ?? string.Empty) : string.Empty;
+                if (string.IsNullOrWhiteSpace(id) || !row.TryGetProperty("attributes", out var at))
+                {
+                    continue;
+                }
+
+                var title = at.TryGetProperty("title", out var titles) ? PickLocalizedString(titles) : string.Empty;
+                if (string.IsNullOrWhiteSpace(title))
+                {
+                    continue;
+                }
+
+                var altName = string.Empty;
+                if (at.TryGetProperty("altTitles", out var altTitles) && altTitles.ValueKind == JsonValueKind.Array)
+                {
+                    altName = altTitles.EnumerateArray()
+                        .Select(PickLocalizedString)
+                        .FirstOrDefault(x => !string.IsNullOrWhiteSpace(x) && !string.Equals(x, title, StringComparison.OrdinalIgnoreCase))
+                        ?? string.Empty;
+                }
+
+                var summary = at.TryGetProperty("description", out var descriptions) ? PickLocalizedString(descriptions) : string.Empty;
+                var genres = new List<string>();
+                if (at.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var tag in tags.EnumerateArray())
+                    {
+                        if (tag.TryGetProperty("attributes", out var tagAttr) &&
+                            tagAttr.TryGetProperty("group", out var group) &&
+                            string.Equals(group.GetString(), "genre", StringComparison.OrdinalIgnoreCase) &&
+                            tagAttr.TryGetProperty("name", out var tagNames))
+                        {
+                            var tagName = PickLocalizedString(tagNames);
+                            if (!string.IsNullOrWhiteSpace(tagName))
+                            {
+                                genres.Add(tagName);
+                            }
+                        }
+                    }
+                }
+
+                var coverFile = string.Empty;
+                if (row.TryGetProperty("relationships", out var rels) && rels.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var rel in rels.EnumerateArray())
+                    {
+                        if (rel.TryGetProperty("type", out var typeEl) &&
+                            string.Equals(typeEl.GetString(), "cover_art", StringComparison.OrdinalIgnoreCase) &&
+                            rel.TryGetProperty("attributes", out var relAttr) &&
+                            relAttr.TryGetProperty("fileName", out var fileEl))
+                        {
+                            coverFile = fileEl.GetString() ?? string.Empty;
+                            break;
+                        }
+                    }
+                }
+
+                var poster = string.IsNullOrWhiteSpace(coverFile)
+                    ? string.Empty
+                    : $"https://uploads.mangadex.org/covers/{id}/{coverFile}.256.jpg";
+
+                list.Add(new CatalogSuggestionViewModel
+                {
+                    Name = title,
+                    AltName = altName,
+                    Genre = genres.Count == 0 ? "Webtoon" : $"Webtoon, {string.Join(", ", genres.Take(4))}",
+                    Summary = summary,
+                    PosterUrl = poster
+                });
+            }
+
+            return RankFuzzy(query, list);
+        }
+        catch
+        {
+            return new List<CatalogSuggestionViewModel>();
+        }
+    }
+
+    private static string PickLocalizedString(JsonElement obj)
+    {
+        if (obj.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        foreach (var key in new[] { "en", "tr", "ja-ro", "ko-ro", "ko", "ja" })
+        {
+            if (obj.TryGetProperty(key, out var value))
+            {
+                var text = value.GetString();
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+        }
+
+        foreach (var prop in obj.EnumerateObject())
+        {
+            var text = prop.Value.GetString();
+            if (!string.IsNullOrWhiteSpace(text))
+            {
+                return text;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    private static List<CatalogSuggestionViewModel> SearchLocalWebtoons(string query, string lang)
+    {
+        var tr = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
+        var local = new List<CatalogSuggestionViewModel>
+        {
+            new() { Name = "Solo Leveling", Genre = tr ? "Webtoon, Aksiyon, Fantastik" : "Webtoon, Action, Fantasy", Summary = tr ? "Zayif bir avcinin guclenme hikayesi." : "A weak hunter rises into a legendary power.", Score = "8.8", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/9/99/Solo_Leveling_Webtoon.png" },
+            new() { Name = "Tower of God", Genre = tr ? "Webtoon, Macera, Fantastik" : "Webtoon, Adventure, Fantasy", Summary = tr ? "Kulenin zirvesine cikmak isteyenlerin hikayesi." : "Climbers risk everything to reach the top of the Tower.", Score = "8.5", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/thumb/7/7e/Tower_of_God_%28manhwa%29.jpg/330px-Tower_of_God_%28manhwa%29.jpg" },
+            new() { Name = "The God of High School", Genre = tr ? "Webtoon, Aksiyon" : "Webtoon, Action", Summary = tr ? "Turnuvada mucadele eden genc dovusculer." : "Young fighters clash in a supernatural martial arts tournament.", Score = "7.9", PosterUrl = "https://upload.wikimedia.org/wikipedia/en/3/35/The_God_of_High_School.jpg" },
+            new() { Name = "Lore Olympus", Genre = tr ? "Webtoon, Romantik, Fantastik" : "Webtoon, Romance, Fantasy", Summary = tr ? "Yunan mitolojisini modern bir romantik dram olarak anlatir." : "Greek myth retold as a modern romantic drama.", Score = "8.4" },
+            new() { Name = "True Beauty", Genre = tr ? "Webtoon, Romantik, Dram" : "Webtoon, Romance, Drama", Summary = tr ? "Makyajla yeni bir hayat kuran bir gencin ask ve kimlik hikayesi." : "A teen navigates love, image, and identity after a glow-up.", Score = "8.0" },
+            new() { Name = "Omniscient Reader", Genre = tr ? "Webtoon, Aksiyon, Fantastik" : "Webtoon, Action, Fantasy", Summary = tr ? "Sadece kendisinin bildigi bir roman gercege donusur." : "A web novel becomes reality for its sole complete reader.", Score = "8.7" },
+            new() { Name = "Lookism", Genre = tr ? "Webtoon, Aksiyon, Dram" : "Webtoon, Action, Drama", Summary = tr ? "Iki bedene sahip olan bir genc okul ve toplum baskisiyla yuzlesir." : "A bullied teen wakes up with a second, ideal body.", Score = "8.2" },
+            new() { Name = "Noblesse", Genre = tr ? "Webtoon, Aksiyon, Dogauustu" : "Webtoon, Action, Supernatural", Summary = tr ? "Asil bir vampir modern dunyada uyanir ve dostlarini korur." : "An ancient noble awakens and protects his new friends.", Score = "8.1" },
+            new() { Name = "Sweet Home", Genre = tr ? "Webtoon, Korku, Gerilim" : "Webtoon, Horror, Thriller", Summary = tr ? "Canavara donusen insanlarin arasinda hayatta kalma mucadelesi." : "Residents fight to survive as people turn into monsters.", Score = "8.3" },
+            new() { Name = "Bastard", Genre = tr ? "Webtoon, Gerilim, Dram" : "Webtoon, Thriller, Drama", Summary = tr ? "Bir genc, seri katil babasinin golgesinden kurtulmaya calisir." : "A boy tries to escape the shadow of his serial killer father.", Score = "8.4" },
+            new() { Name = "Eleceed", Genre = tr ? "Webtoon, Aksiyon, Komedi" : "Webtoon, Action, Comedy", Summary = tr ? "Hizli bir genc ve guclu bir akil hocasi beraber buyur." : "A kind speedster and a powerful mentor grow together.", Score = "8.6" },
+            new() { Name = "The Boxer", Genre = tr ? "Webtoon, Spor, Dram" : "Webtoon, Sports, Drama", Summary = tr ? "Duygusuz bir dahi boks dunyasinda yukselir." : "An emotionless prodigy rises through the boxing world.", Score = "8.5" },
+            new() { Name = "unOrdinary", Genre = tr ? "Webtoon, Aksiyon, Okul" : "Webtoon, Action, School", Summary = tr ? "Guclerin statuyu belirledigi okulda gizemli bir ogrenci dengeleri bozar." : "A student disrupts a school ruled by superpower hierarchy.", Score = "7.8" },
+            new() { Name = "I Love Yoo", Genre = tr ? "Webtoon, Romantik, Dram" : "Webtoon, Romance, Drama", Summary = tr ? "Ask, aile ve guven sorunlariyla buyuyen bir hikaye." : "A drama about love, family, and trust.", Score = "7.9" },
+            new() { Name = "Weak Hero", Genre = tr ? "Webtoon, Aksiyon, Okul" : "Webtoon, Action, School", Summary = tr ? "Zeki ama fiziksel olarak zayif bir ogrenci zorbalara karsi savasir." : "A sharp but physically weak student fights bullies.", Score = "8.2" },
+            new() { Name = "Wind Breaker", Genre = tr ? "Webtoon, Spor, Dram" : "Webtoon, Sports, Drama", Summary = tr ? "Bisiklet tutkusu, rekabet ve arkadaslik hikayesi." : "A cycling story about rivalry, ambition, and friendship.", Score = "8.1" },
+            new() { Name = "Viral Hit", Genre = tr ? "Webtoon, Aksiyon, Komedi" : "Webtoon, Action, Comedy", Summary = tr ? "Zayif bir genc dovus videolariyla viral olur." : "A weak teen goes viral by learning how to fight.", Score = "8.0" },
+            new() { Name = "The Remarried Empress", Genre = tr ? "Webtoon, Romantik, Fantastik" : "Webtoon, Romance, Fantasy", Summary = tr ? "Bir imparatorice ihanetin ardindan kaderini yeniden yazar." : "An empress rewrites her future after betrayal.", Score = "8.2" },
+            new() { Name = "Doom Breaker", Genre = tr ? "Webtoon, Aksiyon, Fantastik" : "Webtoon, Action, Fantasy", Summary = tr ? "Bir savasci tanrilara karsi ikinci sansini kullanir." : "A warrior receives a second chance to defy the gods.", Score = "8.3" },
+            new() { Name = "Return of the Blossoming Blade", Genre = tr ? "Webtoon, Aksiyon, Murim" : "Webtoon, Action, Murim", Summary = tr ? "Efsanevi bir kilic ustasi tarikatini yeniden ayaga kaldirir." : "A legendary swordsman returns to rebuild his sect.", Score = "8.6" },
+            new() { Name = "Teenage Mercenary", Genre = tr ? "Webtoon, Aksiyon, Dram" : "Webtoon, Action, Drama", Summary = tr ? "Eski bir cocuk asker lise hayatina uyum saglamaya calisir." : "A former child soldier tries to live as a high school student.", Score = "8.1" },
+            new() { Name = "The World After the Fall", Genre = tr ? "Webtoon, Aksiyon, Fantastik" : "Webtoon, Action, Fantasy", Summary = tr ? "Dunyanin cokusunden sonra gercegin pesine dusen bir savasci." : "A fighter searches for truth after the world collapses.", Score = "8.0" },
+            new() { Name = "Hero Killer", Genre = tr ? "Webtoon, Aksiyon, Intikam" : "Webtoon, Action, Revenge", Summary = tr ? "Bir kadin kahraman sistemine karsi intikam pesine duser." : "A woman seeks revenge against a corrupt hero system.", Score = "8.0" },
+            new() { Name = "Purple Hyacinth", Genre = tr ? "Webtoon, Gizem, Dram" : "Webtoon, Mystery, Drama", Summary = tr ? "Yalanlari anlayan bir dedektif ve bir suikastci birlikte calisir." : "A lie-detecting detective works with an assassin.", Score = "8.4" },
+            new() { Name = "Castle Swimmer", Genre = tr ? "Webtoon, Fantastik, Romantik" : "Webtoon, Fantasy, Romance", Summary = tr ? "Deniz kralliklari ve kehanetlerle orulu bir fantastik hikaye." : "A fantasy story of sea kingdoms and prophecies.", Score = "8.0" },
+            new() { Name = "SubZero", Genre = tr ? "Webtoon, Romantik, Fantastik" : "Webtoon, Romance, Fantasy", Summary = tr ? "Ejderha soyundan gelen iki krallik arasinda politik bir evlilik." : "A political marriage between heirs of dragon bloodlines.", Score = "7.8" },
+            new() { Name = "Down To Earth", Genre = tr ? "Webtoon, Romantik, Komedi" : "Webtoon, Romance, Comedy", Summary = tr ? "Dunyaya dusen bir uzayli ve yalniz bir gencin hikayesi." : "An alien lands in the life of a lonely young man.", Score = "7.7" }
+        };
+
+        return RankFuzzy(query, local);
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchKitsuMangaAsync(string query)
