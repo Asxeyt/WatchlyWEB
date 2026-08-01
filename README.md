@@ -1,32 +1,51 @@
-#  KategoriSeçici - All-in-One Media Tracker
+Watchly
 
-KategoriSeçici is a comprehensive media management platform that allows you to track, rate, and review movies, TV shows, anime, manga, games, books, comics, and cartoons all in one place.
+Watchly is a media tracker for people who consume too much stuff to keep in their head. Movies, TV shows, anime, manga, games, books, comics, cartoons - log what you've watched or read, rate it, write a review, and keep a watchlist for what's next.
 
----
+It started life as a smaller project called KategoriSeçici and grew into something worth a real name.
 
-##  Features
+Features
+Track movies, TV series, anime, manga, games, books, comics, and cartoons in one place
+Rate and review anything on your list
+Interactive quizzes for recommendations when you don't know what to watch or read next
+Watchlist with reminders so you don't lose track of what you meant to get to
+Google sign-in or email/password, with email verification
+User profiles with avatar and cover images
+Tech stack
+ASP.NET Core MVC (C#, .NET 8)
+PostgreSQL in production (Neon), SQLite for local dev
+Entity Framework Core
+Docker for deployment
+Bootstrap, vanilla JS on the frontend
+Running it locally
 
--  **Wide Media Support:** Easily organize movies, TV series, anime, manga, video games, books, comics, and cartoons.
--  **Ratings & Reviews:** Rate your favorite media and write detailed reviews.
--  **Smart Recommendation Engine:** Take interactive quizzes and polls to get personalized recommendations on what to watch, read, or play next.
--  **Watchlist / Reminders:** Keep track of everything you plan to watch or read so you never forget them.
+Clone it:
 
----
+bash
+git clone https://github.com/Asxeyt/WatchlyWEB.git
+cd WatchlyWEB
 
-##  Tech Stack
+Run it:
 
-- **Backend:** C# / ASP.NET Core MVC
-- **Database:** PostgreSQL (Neon)
-- **Containerization:** Docker
-- **Frontend:** HTML5, CSS3, JavaScript
+bash
+dotnet run
 
----
+By default it falls back to a local SQLite database, so this works out of the box with no extra setup. A few things are optional and only needed if you want the full feature set:
 
-##  Getting Started
+Feature	Environment variable(s)
+PostgreSQL instead of SQLite	DATABASE_URL (or NEON_DATABASE_URL)
+Google sign-in	GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+Verification emails	SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, SMTP_FROM
+Movie search	OMDB_API_KEY
 
-To run the project locally:
+Without SMTP configured, email verification still works, it just won't be able to send anything.
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/Asxeyt/KategoriSecici.git
-   ```
+Docker
+bash
+docker build -t watchly .
+docker run -p 10000:10000 watchly
+Live
+
+kategorisecici.onrender.com - yes, the URL still says the old name, haven't gotten around to moving it.
+
+Made by Asxeyt :)
