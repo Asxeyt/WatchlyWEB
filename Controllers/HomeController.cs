@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -31,16 +32,15 @@ public class HomeController : Controller
     public IActionResult Anasayfa(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
-        ViewData["Lang"] = currentLang;
-        ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
-        ViewData["BodyClass"] = "anasayfa-page";
-        return View();
+        return User.Identity?.IsAuthenticated == true
+            ? RedirectToAction(nameof(Index), new { lang = currentLang, kategori = MedyaKategori.Film })
+            : RedirectToAction("Login", "Account", new { lang = currentLang });
     }
 
     [HttpGet]
     public IActionResult Landing(string lang = "tr")
     {
-        return RedirectToAction(nameof(Anasayfa), new { lang = NormalizeLang(lang) });
+        return Anasayfa(lang);
     }
 
     [HttpGet]
@@ -130,7 +130,9 @@ public class HomeController : Controller
             Tur = CleanValue(form.YeniOgeTur, 240),
             Konu = CleanValue(form.YeniOgeKonu, 3000),
             Puan = CleanValue(form.YeniOgePuan, 80),
-            Fiyat = CleanValue(form.YeniOgeFiyat, 80),
+            Fiyat = seciliKategori == MedyaKategori.Oyun
+                ? CleanValue(LocalizeGamePrice(form.YeniOgeFiyat, lang), 80)
+                : CleanValue(form.YeniOgeFiyat, 80),
             AppUserId = userId.Value,
             Izlendi = false
         };
@@ -302,8 +304,10 @@ public class HomeController : Controller
             .Concat(providerResults)
             .GroupBy(x => x.Name.Trim().ToLowerInvariant())
             .Select(g => g.First())
-            .Take(12)
+            .Take(8)
             .ToList();
+
+        await LocalizeCatalogItemsAsync(results, currentLang);
 
         if (results.Count == 0)
         {
@@ -330,7 +334,7 @@ public class HomeController : Controller
 
         return Json(new
         {
-            items = results.Take(8),
+            items = results,
             message = string.Empty
         });
     }
@@ -454,8 +458,8 @@ public class HomeController : Controller
         summary = await TranslateIfNeededAsync(summary, lang);
 
         var release = FirstNonEmpty(best.ReleaseDate, extras.ReleaseDate);
-        var creator = await TranslateIfNeededAsync(FirstNonEmpty(best.Creator, extras.Creator), lang);
-        var castText = await TranslateIfNeededAsync(FirstNonEmpty(best.Cast, extras.Cast), lang);
+        var creator = FirstNonEmpty(best.Creator, extras.Creator);
+        var castText = FirstNonEmpty(best.Cast, extras.Cast);
 
         var model = new MedyaDetayViewModel
         {
@@ -469,7 +473,9 @@ public class HomeController : Controller
             Tur = genre ?? string.Empty,
             Konu = summary ?? string.Empty,
             Puan = row?.Puan ?? best.Score,
-            Fiyat = row?.Fiyat ?? best.Price,
+            Fiyat = kategori == MedyaKategori.Oyun
+                ? LocalizeGamePrice(IsUnknownGamePrice(row?.Fiyat) ? best.Price : row?.Fiyat, lang)
+                : row?.Fiyat ?? best.Price,
             YayinTarihi = release ?? string.Empty,
             Oyuncular = castText ?? string.Empty,
             Yapimci = creator ?? string.Empty,
@@ -1397,6 +1403,10 @@ public class HomeController : Controller
         {
             item.Tur = await TranslateIfNeededAsync(item.Tur, currentLang);
             item.Konu = await TranslateIfNeededAsync(item.Konu, currentLang);
+            if (item.Kategori == MedyaKategori.Oyun)
+            {
+                item.Fiyat = LocalizeGamePrice(item.Fiyat, currentLang);
+            }
         }
 
         var adetler = await _dbContext.MedyaOgeleri
@@ -1429,6 +1439,86 @@ public class HomeController : Controller
     private static string NormalizeLang(string? lang)
     {
         return string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase) ? "en" : "tr";
+    }
+
+    private static string FreeGamePrice(string lang) => NormalizeLang(lang) == "en" ? "Free" : "Ücretsiz";
+
+    private static bool IsUnknownGamePrice(string? price)
+    {
+        if (string.IsNullOrWhiteSpace(price))
+        {
+            return true;
+        }
+
+        var value = price.Trim();
+        return value.Equals("Güncel mağaza fiyatı", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Guncel magaza fiyati", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Current store price", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Bilgi yok", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("No data", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string LocalizeGamePrice(string? price, string lang)
+    {
+        if (IsUnknownGamePrice(price))
+        {
+            return string.Empty;
+        }
+
+        var value = price!.Trim();
+        return value.Equals("Free", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Free to Play", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Ucretsiz", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Ücretsiz", StringComparison.OrdinalIgnoreCase) ||
+               value.Equals("Oynaması ücretsiz", StringComparison.OrdinalIgnoreCase) ||
+               Regex.IsMatch(value, @"^(?:[$€£₺]\s*)?0(?:[.,]00)?\s*(?:[$€£₺]|TL|USD|EUR)?$", RegexOptions.IgnoreCase)
+            ? FreeGamePrice(lang)
+            : value;
+    }
+
+    private static string ReadSteamPrice(JsonElement item, string lang, string priceProperty)
+    {
+        if (item.TryGetProperty("is_free", out var isFree) && isFree.ValueKind == JsonValueKind.True)
+        {
+            return FreeGamePrice(lang);
+        }
+
+        if (!item.TryGetProperty(priceProperty, out var price) || price.ValueKind != JsonValueKind.Object)
+        {
+            return string.Empty;
+        }
+
+        var cents = 0;
+        var hasFinal = price.TryGetProperty("final", out var final) &&
+                       final.ValueKind == JsonValueKind.Number && final.TryGetInt32(out cents);
+        if (hasFinal && cents == 0)
+        {
+            return FreeGamePrice(lang);
+        }
+
+        if (price.TryGetProperty("final_formatted", out var formatted) &&
+            formatted.ValueKind == JsonValueKind.String &&
+            !string.IsNullOrWhiteSpace(formatted.GetString()))
+        {
+            return formatted.GetString()!.Trim();
+        }
+
+        if (!hasFinal)
+        {
+            return string.Empty;
+        }
+
+        var amount = (cents / 100m).ToString("0.00", CultureInfo.InvariantCulture);
+        var currency = price.TryGetProperty("currency", out var code) && code.ValueKind == JsonValueKind.String
+            ? code.GetString()?.ToUpperInvariant()
+            : null;
+        return currency switch
+        {
+            "TRY" => $"₺{amount}",
+            "USD" => $"${amount}",
+            null or "" => amount,
+            _ => $"{amount} {currency}"
+        };
     }
 
     private static int NormalizeDegerlendirmeSeviyesi(int? level)
@@ -1578,7 +1668,7 @@ public class HomeController : Controller
 
         if (row.Kategori == MedyaKategori.Oyun)
         {
-            return string.IsNullOrWhiteSpace(row.Fiyat);
+            return IsUnknownGamePrice(row.Fiyat);
         }
 
         if (row.Kategori == MedyaKategori.Kitap || row.Kategori == MedyaKategori.CizgiRoman || row.Kategori == MedyaKategori.Webtoon)
@@ -1631,7 +1721,7 @@ public class HomeController : Controller
             _ => new List<CatalogSuggestionViewModel>()
         };
 
-        var best = suggestions.FirstOrDefault();
+        var best = suggestions.FirstOrDefault(x => IsAcceptableMatch(item.Ad, x.Name));
         if (best is null)
         {
             return false;
@@ -1658,9 +1748,9 @@ public class HomeController : Controller
 
         if (item.Kategori == MedyaKategori.Oyun)
         {
-            if (string.IsNullOrWhiteSpace(item.Fiyat) && !string.IsNullOrWhiteSpace(best.Price))
+            if (IsUnknownGamePrice(item.Fiyat) && !IsUnknownGamePrice(best.Price))
             {
-                item.Fiyat = CleanValue(best.Price, 80);
+                item.Fiyat = CleanValue(LocalizeGamePrice(best.Price, lang), 80);
                 changed = true;
             }
         }
@@ -2468,18 +2558,7 @@ public class HomeController : Controller
                     ? idEl.GetInt32()
                     : 0;
 
-                var price = string.Empty;
-                if (item.TryGetProperty("price", out var pr) && pr.ValueKind == JsonValueKind.Object &&
-                    pr.TryGetProperty("final", out var finalPrice) && finalPrice.ValueKind == JsonValueKind.Number)
-                {
-                    price = en
-                        ? $"${finalPrice.GetInt32() / 100.0:0.00}"
-                        : $"?{finalPrice.GetInt32() / 100.0:0.00}";
-                }
-                else if (item.TryGetProperty("is_free", out var isFree) && isFree.ValueKind == JsonValueKind.True)
-                {
-                    price = en ? "Free" : "Ucretsiz";
-                }
+                var price = ReadSteamPrice(item, lang, "price");
                 var score = string.Empty;
                 if (item.TryGetProperty("review_score", out var rv) && rv.ValueKind == JsonValueKind.Number)
                 {
@@ -2510,10 +2589,16 @@ public class HomeController : Controller
                     {
                         if (string.IsNullOrWhiteSpace(dto.Genre)) dto.Genre = detail.Value.Genre;
                         if (string.IsNullOrWhiteSpace(dto.Summary)) dto.Summary = detail.Value.Summary;
-                        if (string.IsNullOrWhiteSpace(dto.Price)) dto.Price = detail.Value.Price;
+                        if (IsUnknownGamePrice(dto.Price) ||
+                            string.Equals(detail.Value.Price, FreeGamePrice(lang), StringComparison.OrdinalIgnoreCase))
+                        {
+                            dto.Price = detail.Value.Price;
+                        }
                         if (string.IsNullOrWhiteSpace(dto.PosterUrl)) dto.PosterUrl = detail.Value.Poster;
                     }
                 }
+
+                dto.AltName = dto.Price;
 
                 list.Add(dto);
             }
@@ -2524,6 +2609,20 @@ public class HomeController : Controller
             }
 
             var fallback = await SearchSteamCommunityAppsAsync(query, lang);
+            foreach (var game in list)
+            {
+                var alternative = fallback.FirstOrDefault(x => string.Equals(x.Name, game.Name, StringComparison.OrdinalIgnoreCase));
+                if (alternative is null)
+                {
+                    continue;
+                }
+
+                if (IsUnknownGamePrice(game.Price)) game.Price = alternative.Price;
+                if (string.IsNullOrWhiteSpace(game.Genre)) game.Genre = alternative.Genre;
+                if (string.IsNullOrWhiteSpace(game.Summary)) game.Summary = alternative.Summary;
+                if (string.IsNullOrWhiteSpace(game.PosterUrl)) game.PosterUrl = alternative.PosterUrl;
+                game.AltName = game.Price;
+            }
             var merged = list.Concat(fallback)
                 .GroupBy(x => x.Name.Trim().ToLowerInvariant())
                 .Select(g => g.First())
@@ -2603,7 +2702,6 @@ public class HomeController : Controller
     {
         var client = _httpClientFactory.CreateClient();
         client.Timeout = TimeSpan.FromSeconds(8);
-        var en = string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
         var url = $"https://steamcommunity.com/actions/SearchApps/{Uri.EscapeDataString(query)}";
         try
         {
@@ -2644,7 +2742,7 @@ public class HomeController : Controller
                     {
                         dto.Genre = detail.Value.Genre;
                         dto.Summary = detail.Value.Summary;
-                        dto.Price = string.IsNullOrWhiteSpace(detail.Value.Price) ? (en ? "Free" : "Ucretsiz") : detail.Value.Price;
+                        dto.Price = detail.Value.Price;
                         dto.PosterUrl = detail.Value.Poster;
                     }
                 }
@@ -2652,7 +2750,23 @@ public class HomeController : Controller
                 list.Add(dto);
             }
 
-            var merged = list.Concat(SearchLocalGames(query, lang))
+            var localGames = SearchLocalGames(query, lang);
+            foreach (var game in list)
+            {
+                var alternative = localGames.FirstOrDefault(x => string.Equals(x.Name, game.Name, StringComparison.OrdinalIgnoreCase));
+                if (alternative is null)
+                {
+                    continue;
+                }
+
+                if (IsUnknownGamePrice(game.Price)) game.Price = alternative.Price;
+                if (string.IsNullOrWhiteSpace(game.Genre)) game.Genre = alternative.Genre;
+                if (string.IsNullOrWhiteSpace(game.Summary)) game.Summary = alternative.Summary;
+                if (string.IsNullOrWhiteSpace(game.PosterUrl)) game.PosterUrl = alternative.PosterUrl;
+                game.AltName = game.Price;
+            }
+
+            var merged = list.Concat(localGames)
                 .GroupBy(x => x.Name.Trim().ToLowerInvariant())
                 .Select(g => g.First())
                 .ToList();
@@ -2742,8 +2856,8 @@ public class HomeController : Controller
         var tr = !string.Equals(lang, "en", StringComparison.OrdinalIgnoreCase);
         var local = new List<CatalogSuggestionViewModel>
         {
-            new() { Name = "Zula", Genre = tr ? "Aksiyon, Nisanci" : "Action, Shooter", Summary = tr ? "Turk yapimi rekabetci FPS oyunu." : "A competitive FPS game.", Price = tr ? "Ucretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/513710/header.jpg" },
-            new() { Name = "Apex Legends", Genre = tr ? "Aksiyon, Battle Royale" : "Action, Battle Royale", Summary = tr ? "Takim tabanli battle royale nişanci oyunu." : "Squad-based battle royale shooter.", Price = tr ? "Ucretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/header.jpg" }
+            new() { Name = "Zula", Genre = tr ? "Aksiyon, Nisanci" : "Action, Shooter", Summary = tr ? "Turk yapimi rekabetci FPS oyunu." : "A competitive FPS game.", Price = tr ? "Ücretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/513710/header.jpg" },
+            new() { Name = "Apex Legends", Genre = tr ? "Aksiyon, Battle Royale" : "Action, Battle Royale", Summary = tr ? "Takim tabanli battle royale nişanci oyunu." : "Squad-based battle royale shooter.", Price = tr ? "Ücretsiz" : "Free", PosterUrl = "https://cdn.cloudflare.steamstatic.com/steam/apps/1172470/header.jpg" }
         };
         return RankFuzzy(query, local);
     }
@@ -3118,6 +3232,7 @@ public class HomeController : Controller
         {
             item.Genre = await TranslateIfNeededAsync(item.Genre, lang);
             item.Summary = await TranslateIfNeededAsync(item.Summary, lang);
+            item.Price = LocalizeGamePrice(item.Price, lang);
         }
 
         return items;
@@ -3132,18 +3247,6 @@ public class HomeController : Controller
         }
 
         var lang = NormalizeLang(targetLang);
-        var hasTurkishChars = value.IndexOfAny(new[] { 'ç', 'ğ', 'ı', 'ö', 'ş', 'ü', 'Ç', 'Ğ', 'İ', 'Ö', 'Ş', 'Ü' }) >= 0;
-
-        if (lang == "tr" && hasTurkishChars)
-        {
-            return value;
-        }
-
-        if (lang == "en" && !hasTurkishChars)
-        {
-            return value;
-        }
-
         var cacheKey = $"{lang}|{value}";
         if (TranslationCache.TryGetValue(cacheKey, out var cached))
         {
@@ -3223,12 +3326,7 @@ public class HomeController : Controller
             }
 
             var summary = data.TryGetProperty("short_description", out var sd) ? (sd.GetString() ?? string.Empty) : string.Empty;
-            var price = string.Empty;
-            if (data.TryGetProperty("price_overview", out var po) &&
-                po.TryGetProperty("final_formatted", out var ff))
-            {
-                price = ff.GetString() ?? string.Empty;
-            }
+            var price = ReadSteamPrice(data, lang, "price_overview");
 
             var poster = data.TryGetProperty("header_image", out var hi) ? (hi.GetString() ?? string.Empty) : string.Empty;
             return (genre, summary, price, NormalizePosterUrl(poster) ?? string.Empty);
