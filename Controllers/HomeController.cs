@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Security.Claims;
 using System.Collections.Concurrent;
-using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -32,15 +31,16 @@ public class HomeController : Controller
     public IActionResult Anasayfa(string lang = "tr")
     {
         var currentLang = NormalizeLang(lang);
-        return User.Identity?.IsAuthenticated == true
-            ? RedirectToAction(nameof(Index), new { lang = currentLang, kategori = MedyaKategori.Film })
-            : RedirectToAction("Login", "Account", new { lang = currentLang });
+        ViewData["Lang"] = currentLang;
+        ViewData["SelectedCategory"] = MedyaKategori.Film.ToString();
+        ViewData["BodyClass"] = "anasayfa-page";
+        return View();
     }
 
     [HttpGet]
     public IActionResult Landing(string lang = "tr")
     {
-        return Anasayfa(lang);
+        return RedirectToAction(nameof(Anasayfa), new { lang = NormalizeLang(lang) });
     }
 
     [HttpGet]
@@ -298,7 +298,10 @@ public class HomeController : Controller
         var providerResults = await SearchByCategoryAsync(kategori, query, currentLang);
 
         var listResults = await SearchFromUserListAsync(query, kategori, userId.Value);
-        var results = MergeCatalogItems(listResults.Concat(providerResults))
+        var results = listResults
+            .Concat(providerResults)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
             .Take(12)
             .ToList();
 
@@ -476,8 +479,6 @@ public class HomeController : Controller
             Gorseller = extras.Images,
             OyuncuKartlari = extras.CastCards
         };
-
-        ApplyDetailMetadataFallbacks(model);
 
         if (string.IsNullOrWhiteSpace(model.FragmanUrl))
         {
@@ -1533,14 +1534,11 @@ public class HomeController : Controller
             }
         }
 
-        var ranked = RankFuzzy(query, MergeCatalogItems(all));
-        var localized = await LocalizeCatalogItemsAsync(ranked, lang);
-        foreach (var item in localized)
-        {
-            ApplyCatalogMetadataFallbacks(item, kategori, lang);
-        }
-
-        return localized;
+        var ranked = RankFuzzy(query, all)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
+        return await LocalizeCatalogItemsAsync(ranked, lang);
     }
 
     private static IEnumerable<string> BuildQueryVariants(string query)
@@ -1571,16 +1569,16 @@ public class HomeController : Controller
 
     private bool NeedsMetadata(MedyaOgesi row)
     {
-        if (IsMissingMetadata(row.PosterUrl) ||
-            IsMissingMetadata(row.Tur) ||
-            IsMissingMetadata(row.Konu))
+        if (string.IsNullOrWhiteSpace(row.PosterUrl) ||
+            string.IsNullOrWhiteSpace(row.Tur) ||
+            string.IsNullOrWhiteSpace(row.Konu))
         {
             return true;
         }
 
         if (row.Kategori == MedyaKategori.Oyun)
         {
-            return IsMissingMetadata(row.Fiyat);
+            return string.IsNullOrWhiteSpace(row.Fiyat);
         }
 
         if (row.Kategori == MedyaKategori.Kitap || row.Kategori == MedyaKategori.CizgiRoman || row.Kategori == MedyaKategori.Webtoon)
@@ -1588,7 +1586,7 @@ public class HomeController : Controller
             return false;
         }
 
-        return IsMissingMetadata(row.Puan);
+        return string.IsNullOrWhiteSpace(row.Puan);
     }
 
     private async Task EnrichMissingMetadataInCategoryAsync(MedyaKategori kategori, int userId, string lang)
@@ -1596,35 +1594,19 @@ public class HomeController : Controller
         var rows = await _dbContext.MedyaOgeleri
             .Where(x => x.AppUserId == userId && x.Kategori == kategori)
             .OrderByDescending(x => x.OlusturmaTarihi)
+            .Take(40)
             .ToListAsync();
 
-        var targets = rows.Where(NeedsMetadata).ToList();
+        var targets = rows.Where(NeedsMetadata).Take(16).ToList();
         if (targets.Count == 0)
         {
             return;
         }
 
-        // Keep the first request fast: enrich the newest items from live providers,
-        // then complete every remaining record with explicit Watchly metadata.
-        var providerTargets = targets.Take(6).ToList();
-        using var gate = new SemaphoreSlim(3);
-        var enrichmentTasks = providerTargets.Select(async item =>
+        var changed = false;
+        foreach (var item in targets)
         {
-            await gate.WaitAsync();
-            try
-            {
-                return await FillMissingMetadataAsync(item, lang);
-            }
-            finally
-            {
-                gate.Release();
-            }
-        });
-
-        var changed = (await Task.WhenAll(enrichmentTasks)).Any(x => x);
-        foreach (var item in targets.Skip(providerTargets.Count))
-        {
-            changed |= ApplyMetadataFallbacks(item, lang);
+            changed |= await FillMissingMetadataAsync(item, lang);
         }
 
         if (changed)
@@ -1649,27 +1631,26 @@ public class HomeController : Controller
             _ => new List<CatalogSuggestionViewModel>()
         };
 
-        var best = suggestions.FirstOrDefault(x => IsAcceptableMatch(item.Ad, x.Name));
-        if (best is null || IsMissingMetadata(best.Genre) || IsMissingMetadata(best.Summary) || IsMissingMetadata(best.PosterUrl))
+        var best = suggestions.FirstOrDefault();
+        if (best is null)
         {
-            var wikipedia = await FetchWikipediaSuggestionAsync(item.Ad, item.Kategori);
-            best = MergeCatalogItem(best, wikipedia) ?? best;
+            return false;
         }
 
         var changed = false;
-        if (best is not null && IsMissingMetadata(item.PosterUrl) && !IsMissingMetadata(best.PosterUrl))
+        if (string.IsNullOrWhiteSpace(item.PosterUrl) && !string.IsNullOrWhiteSpace(best.PosterUrl))
         {
             item.PosterUrl = NormalizePosterUrl(CleanValue(best.PosterUrl, 600));
             changed = true;
         }
 
-        if (best is not null && IsMissingMetadata(item.Tur) && !IsMissingMetadata(best.Genre))
+        if (string.IsNullOrWhiteSpace(item.Tur) && !string.IsNullOrWhiteSpace(best.Genre))
         {
             item.Tur = CleanValue(await TranslateIfNeededAsync(best.Genre, lang), 240);
             changed = true;
         }
 
-        if (best is not null && IsMissingMetadata(item.Konu) && !IsMissingMetadata(best.Summary))
+        if (string.IsNullOrWhiteSpace(item.Konu) && !string.IsNullOrWhiteSpace(best.Summary))
         {
             item.Konu = CleanValue(await TranslateIfNeededAsync(best.Summary, lang), 3000);
             changed = true;
@@ -1677,7 +1658,7 @@ public class HomeController : Controller
 
         if (item.Kategori == MedyaKategori.Oyun)
         {
-            if (best is not null && IsMissingMetadata(item.Fiyat) && !IsMissingMetadata(best.Price))
+            if (string.IsNullOrWhiteSpace(item.Fiyat) && !string.IsNullOrWhiteSpace(best.Price))
             {
                 item.Fiyat = CleanValue(best.Price, 80);
                 changed = true;
@@ -1685,285 +1666,14 @@ public class HomeController : Controller
         }
         else if (item.Kategori != MedyaKategori.Kitap && item.Kategori != MedyaKategori.CizgiRoman && item.Kategori != MedyaKategori.Webtoon)
         {
-            if (best is not null && IsMissingMetadata(item.Puan) && !IsMissingMetadata(best.Score))
+            if (string.IsNullOrWhiteSpace(item.Puan) && !string.IsNullOrWhiteSpace(best.Score))
             {
                 item.Puan = CleanValue(best.Score, 80);
                 changed = true;
             }
         }
 
-        return ApplyMetadataFallbacks(item, lang) || changed;
-    }
-
-    private async Task<CatalogSuggestionViewModel?> FetchWikipediaSuggestionAsync(string name, MedyaKategori kategori)
-    {
-        var qualifier = kategori switch
-        {
-            MedyaKategori.Anime => "anime",
-            MedyaKategori.Manga => "manga",
-            MedyaKategori.Kitap => "book",
-            MedyaKategori.Dizi => "television series",
-            MedyaKategori.Film => "film",
-            MedyaKategori.Oyun => "video game",
-            MedyaKategori.CizgiFilm => "animated film television",
-            MedyaKategori.CizgiRoman => "comic book",
-            MedyaKategori.Webtoon => "webtoon",
-            _ => string.Empty
-        };
-        var search = string.IsNullOrWhiteSpace(qualifier) ? name : $"{name} {qualifier}";
-        var url = "https://en.wikipedia.org/w/api.php?action=query&generator=search" +
-                  $"&gsrsearch={Uri.EscapeDataString(search)}&gsrlimit=5" +
-                  "&prop=extracts%7Cpageimages&exintro=1&explaintext=1" +
-                  "&piprop=thumbnail&pithumbsize=500&format=json&formatversion=2&origin=*";
-
-        try
-        {
-            var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(6);
-            using var request = new HttpRequestMessage(HttpMethod.Get, url);
-            request.Headers.TryAddWithoutValidation("User-Agent", $"Watchly/{WatchlyRelease.Version} ({WatchlyRelease.Author})");
-            using var response = await client.SendAsync(request);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            await using var stream = await response.Content.ReadAsStreamAsync();
-            using var doc = await JsonDocument.ParseAsync(stream);
-            if (!doc.RootElement.TryGetProperty("query", out var queryNode) ||
-                !queryNode.TryGetProperty("pages", out var pages) ||
-                pages.ValueKind != JsonValueKind.Array)
-            {
-                return null;
-            }
-
-            foreach (var page in pages.EnumerateArray())
-            {
-                var title = page.TryGetProperty("title", out var titleNode)
-                    ? titleNode.GetString() ?? string.Empty
-                    : string.Empty;
-                var summary = page.TryGetProperty("extract", out var extractNode)
-                    ? extractNode.GetString() ?? string.Empty
-                    : string.Empty;
-                var poster = page.TryGetProperty("thumbnail", out var thumbnail) &&
-                             thumbnail.TryGetProperty("source", out var source)
-                    ? source.GetString() ?? string.Empty
-                    : string.Empty;
-
-                if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(summary))
-                {
-                    continue;
-                }
-
-                return new CatalogSuggestionViewModel
-                {
-                    Name = title,
-                    Genre = CategoryGenreFallback(kategori, "en"),
-                    Summary = summary,
-                    PosterUrl = NormalizePosterUrl(poster) ?? string.Empty
-                };
-            }
-        }
-        catch
-        {
-            // Other catalog providers and the deterministic Watchly fallback remain available.
-        }
-
-        return null;
-    }
-
-    private static bool ApplyMetadataFallbacks(MedyaOgesi item, string lang)
-    {
-        var changed = false;
-        if (IsMissingMetadata(item.PosterUrl))
-        {
-            item.PosterUrl = "/images/watchly-logo.png";
-            changed = true;
-        }
-
-        if (IsMissingMetadata(item.Tur))
-        {
-            item.Tur = CategoryGenreFallback(item.Kategori, lang);
-            changed = true;
-        }
-
-        if (IsMissingMetadata(item.Konu))
-        {
-            item.Konu = SummaryFallback(item.Ad, item.Kategori, lang);
-            changed = true;
-        }
-
-        if (item.Kategori == MedyaKategori.Oyun && IsMissingMetadata(item.Fiyat))
-        {
-            item.Fiyat = NormalizeLang(lang) == "en" ? "Current store price" : "Güncel mağaza fiyatı";
-            changed = true;
-        }
-        else if (!IsBookLike(item.Kategori) && item.Kategori != MedyaKategori.Oyun && IsMissingMetadata(item.Puan))
-        {
-            item.Puan = ScoreFallback(item.Ad, item.Kategori);
-            changed = true;
-        }
-
         return changed;
-    }
-
-    private static void ApplyCatalogMetadataFallbacks(CatalogSuggestionViewModel item, MedyaKategori kategori, string lang)
-    {
-        if (IsMissingMetadata(item.PosterUrl))
-        {
-            item.PosterUrl = "/images/watchly-logo.png";
-        }
-
-        if (IsMissingMetadata(item.Genre))
-        {
-            item.Genre = CategoryGenreFallback(kategori, lang);
-        }
-
-        if (IsMissingMetadata(item.Summary))
-        {
-            item.Summary = SummaryFallback(item.Name, kategori, lang);
-        }
-
-        if (kategori == MedyaKategori.Oyun && IsMissingMetadata(item.Price))
-        {
-            item.Price = NormalizeLang(lang) == "en" ? "Current store price" : "Güncel mağaza fiyatı";
-        }
-        else if (!IsBookLike(kategori) && kategori != MedyaKategori.Oyun && IsMissingMetadata(item.Score))
-        {
-            item.Score = ScoreFallback(item.Name, kategori);
-        }
-    }
-
-    private static void ApplyDetailMetadataFallbacks(MedyaDetayViewModel model)
-    {
-        if (IsMissingMetadata(model.PosterUrl))
-        {
-            model.PosterUrl = "/images/watchly-logo.png";
-        }
-
-        if (IsMissingMetadata(model.Tur))
-        {
-            model.Tur = CategoryGenreFallback(model.Kategori, model.Dil);
-        }
-
-        if (IsMissingMetadata(model.Konu))
-        {
-            model.Konu = SummaryFallback(model.Ad, model.Kategori, model.Dil);
-        }
-
-        if (model.Kategori == MedyaKategori.Oyun && IsMissingMetadata(model.Fiyat))
-        {
-            model.Fiyat = NormalizeLang(model.Dil) == "en" ? "Current store price" : "Güncel mağaza fiyatı";
-        }
-        else if (!IsBookLike(model.Kategori) && model.Kategori != MedyaKategori.Oyun && IsMissingMetadata(model.Puan))
-        {
-            model.Puan = ScoreFallback(model.Ad, model.Kategori);
-        }
-    }
-
-    private static bool IsBookLike(MedyaKategori kategori) =>
-        kategori is MedyaKategori.Kitap or MedyaKategori.CizgiRoman or MedyaKategori.Webtoon;
-
-    private static bool IsMissingMetadata(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        var normalized = value.Trim();
-        return normalized.Equals("Bilgi yok", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("Konu yok", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("No data", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("No summary", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("Unknown", StringComparison.OrdinalIgnoreCase) ||
-               normalized.Equals("N/A", StringComparison.OrdinalIgnoreCase) ||
-               normalized == "-";
-    }
-
-    private static string CategoryGenreFallback(MedyaKategori kategori, string lang)
-    {
-        var english = NormalizeLang(lang) == "en";
-        return kategori switch
-        {
-            MedyaKategori.Anime => "Anime",
-            MedyaKategori.Manga => "Manga",
-            MedyaKategori.Kitap => english ? "Literature" : "Edebiyat",
-            MedyaKategori.Dizi => english ? "TV Series" : "Dizi",
-            MedyaKategori.Film => english ? "Movie" : "Film",
-            MedyaKategori.Oyun => english ? "Video Game" : "Video Oyunu",
-            MedyaKategori.CizgiFilm => english ? "Animation" : "Animasyon",
-            MedyaKategori.CizgiRoman => english ? "Comic" : "Çizgi Roman",
-            MedyaKategori.Webtoon => "Webtoon",
-            _ => english ? "Media" : "Medya"
-        };
-    }
-
-    private static string SummaryFallback(string name, MedyaKategori kategori, string lang)
-    {
-        var english = NormalizeLang(lang) == "en";
-        var kind = CategoryGenreFallback(kategori, lang).ToLowerInvariant();
-        var article = kind.Length > 0 && "aeiou".Contains(kind[0]) ? "an" : "a";
-        return english
-            ? $"{name} is {article} {kind} title in the Watchly catalog. This short introduction was created by Watchly because the connected sources did not provide a synopsis."
-            : $"{name}, Watchly kataloğundaki {kind} içeriklerinden biridir. Bağlı kaynaklarda konu bulunmadığı için bu kısa tanıtım Watchly tarafından oluşturuldu.";
-    }
-
-    private static string ScoreFallback(string name, MedyaKategori kategori)
-    {
-        unchecked
-        {
-            uint hash = 2166136261;
-            foreach (var ch in $"{kategori}|{name}".ToUpperInvariant())
-            {
-                hash ^= ch;
-                hash *= 16777619;
-            }
-
-            var score = 6.0 + hash % 26 / 10.0;
-            return $"{score.ToString("0.0", CultureInfo.InvariantCulture)}/10 · Watchly";
-        }
-    }
-
-    private static List<CatalogSuggestionViewModel> MergeCatalogItems(IEnumerable<CatalogSuggestionViewModel> source)
-    {
-        return source
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name))
-            .GroupBy(x => x.Name.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(group => group.Aggregate((merged, next) => MergeCatalogItem(merged, next)!))
-            .ToList();
-    }
-
-    private static CatalogSuggestionViewModel? MergeCatalogItem(CatalogSuggestionViewModel? primary, CatalogSuggestionViewModel? secondary)
-    {
-        if (primary is null)
-        {
-            return secondary;
-        }
-
-        if (secondary is null)
-        {
-            return primary;
-        }
-
-        static string Pick(string? first, string? second) =>
-            !IsMissingMetadata(first) ? first!.Trim() : (!IsMissingMetadata(second) ? second!.Trim() : string.Empty);
-
-        return new CatalogSuggestionViewModel
-        {
-            Name = Pick(primary.Name, secondary.Name),
-            AltName = Pick(primary.AltName, secondary.AltName),
-            Genre = Pick(primary.Genre, secondary.Genre),
-            PosterUrl = Pick(primary.PosterUrl, secondary.PosterUrl),
-            Summary = Pick(primary.Summary, secondary.Summary),
-            Score = Pick(primary.Score, secondary.Score),
-            Price = Pick(primary.Price, secondary.Price),
-            ReleaseDate = Pick(primary.ReleaseDate, secondary.ReleaseDate),
-            Cast = Pick(primary.Cast, secondary.Cast),
-            Creator = Pick(primary.Creator, secondary.Creator),
-            TrailerUrl = Pick(primary.TrailerUrl, secondary.TrailerUrl),
-            DetailUrl = Pick(primary.DetailUrl, secondary.DetailUrl)
-        };
     }
 
     private async Task<List<CatalogSuggestionViewModel>> SearchJikanAsync(string query, bool anime)
@@ -2128,7 +1838,10 @@ public class HomeController : Controller
         var open = await SearchOpenLibraryAsync(query, lang);
         var google = await SearchGoogleBooksAsync(query, comicsOnly, lang);
 
-        var merged = MergeCatalogItems(open.Concat(google));
+        var merged = open.Concat(google)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
 
         if (comicsOnly)
         {
@@ -2240,12 +1953,15 @@ public class HomeController : Controller
 
         await Task.WhenAll(tvTask, tvAnimationTask, moviesTask, moviesAnimationTask, moviesStudiosTask);
 
-        var merged = MergeCatalogItems(tvTask.Result
+        var merged = tvTask.Result
             .Concat(tvAnimationTask.Result)
             .Concat(moviesTask.Result)
             .Concat(moviesAnimationTask.Result)
             .Concat(moviesStudiosTask.Result)
-            .Concat(local));
+            .Concat(local)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
 
         var filtered = merged
             .Where(x =>
@@ -2475,11 +2191,14 @@ public class HomeController : Controller
         var imdbTask = SearchImdbSuggestionsAsync(query);
         await Task.WhenAll(ytsTask, omdbTask, itunesTask, imdbTask);
 
-        var merged = MergeCatalogItems(ytsTask.Result
+        var merged = ytsTask.Result
             .Concat(omdbTask.Result)
             .Concat(itunesTask.Result)
             .Concat(imdbTask.Result)
-            .Concat(SearchLocalMovies(query)));
+            .Concat(SearchLocalMovies(query))
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
 
         return RankFuzzy(query, merged);
     }
@@ -2617,7 +2336,6 @@ public class HomeController : Controller
             }
 
             var list = new List<CatalogSuggestionViewModel>();
-            var imdbIds = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             foreach (var item in items.EnumerateArray())
             {
                 var title = item.TryGetProperty("Title", out var t) ? (t.GetString() ?? string.Empty) : string.Empty;
@@ -2629,10 +2347,6 @@ public class HomeController : Controller
                 var year = item.TryGetProperty("Year", out var y) ? (y.GetString() ?? string.Empty) : string.Empty;
                 var poster = item.TryGetProperty("Poster", out var p) ? (p.GetString() ?? string.Empty) : string.Empty;
                 var imdbId = item.TryGetProperty("imdbID", out var imdb) ? (imdb.GetString() ?? string.Empty) : string.Empty;
-                if (!string.IsNullOrWhiteSpace(imdbId))
-                {
-                    imdbIds[title] = imdbId;
-                }
 
                 list.Add(new CatalogSuggestionViewModel
                 {
@@ -2648,60 +2362,11 @@ public class HomeController : Controller
                 });
             }
 
-            var exactIndex = list.FindIndex(x => string.Equals(x.Name.Trim(), query.Trim(), StringComparison.OrdinalIgnoreCase));
-            if (exactIndex >= 0 && imdbIds.TryGetValue(list[exactIndex].Name, out var exactImdbId))
-            {
-                var detail = await FetchOmdbDetailAsync(client, apiKey, exactImdbId);
-                if (detail is not null)
-                {
-                    list[exactIndex] = MergeCatalogItem(list[exactIndex], detail)!;
-                }
-            }
-
             return RankFuzzy(query, list);
         }
         catch
         {
             return new List<CatalogSuggestionViewModel>();
-        }
-    }
-
-    private static async Task<CatalogSuggestionViewModel?> FetchOmdbDetailAsync(HttpClient client, string apiKey, string imdbId)
-    {
-        var url = $"https://www.omdbapi.com/?apikey={Uri.EscapeDataString(apiKey)}&i={Uri.EscapeDataString(imdbId)}&plot=full";
-        try
-        {
-            await using var stream = await client.GetStreamAsync(url);
-            using var doc = await JsonDocument.ParseAsync(stream);
-            var root = doc.RootElement;
-            if (root.TryGetProperty("Response", out var response) &&
-                string.Equals(response.GetString(), "False", StringComparison.OrdinalIgnoreCase))
-            {
-                return null;
-            }
-
-            static string Read(JsonElement root, string property) =>
-                root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
-                    ? value.GetString() ?? string.Empty
-                    : string.Empty;
-
-            var poster = Read(root, "Poster");
-            return new CatalogSuggestionViewModel
-            {
-                Name = Read(root, "Title"),
-                Genre = Read(root, "Genre"),
-                Summary = Read(root, "Plot"),
-                Score = Read(root, "imdbRating"),
-                PosterUrl = NormalizePosterUrl(IsMissingMetadata(poster) ? string.Empty : poster) ?? string.Empty,
-                ReleaseDate = Read(root, "Released"),
-                Creator = Read(root, "Director"),
-                Cast = Read(root, "Actors"),
-                DetailUrl = $"https://www.imdb.com/title/{imdbId}/"
-            };
-        }
-        catch
-        {
-            return null;
         }
     }
 
@@ -2776,7 +2441,7 @@ public class HomeController : Controller
         try
         {
             using var req = new HttpRequestMessage(HttpMethod.Get, url);
-            req.Headers.TryAddWithoutValidation("User-Agent", $"Watchly/{WatchlyRelease.Version} ({WatchlyRelease.Author})");
+            req.Headers.TryAddWithoutValidation("User-Agent", "Watchly/1.0");
             using var res = await client.SendAsync(req);
             if (!res.IsSuccessStatusCode)
             {
@@ -2809,7 +2474,7 @@ public class HomeController : Controller
                 {
                     price = en
                         ? $"${finalPrice.GetInt32() / 100.0:0.00}"
-                        : $"₺{finalPrice.GetInt32() / 100.0:0.00}";
+                        : $"?{finalPrice.GetInt32() / 100.0:0.00}";
                 }
                 else if (item.TryGetProperty("is_free", out var isFree) && isFree.ValueKind == JsonValueKind.True)
                 {
@@ -2859,7 +2524,10 @@ public class HomeController : Controller
             }
 
             var fallback = await SearchSteamCommunityAppsAsync(query, lang);
-            var merged = MergeCatalogItems(list.Concat(fallback));
+            var merged = list.Concat(fallback)
+                .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
             return RankFuzzy(query, merged);
         }
         catch
@@ -2976,9 +2644,7 @@ public class HomeController : Controller
                     {
                         dto.Genre = detail.Value.Genre;
                         dto.Summary = detail.Value.Summary;
-                        dto.Price = string.IsNullOrWhiteSpace(detail.Value.Price)
-                            ? (en ? "Current store price" : "Güncel mağaza fiyatı")
-                            : detail.Value.Price;
+                        dto.Price = string.IsNullOrWhiteSpace(detail.Value.Price) ? (en ? "Free" : "Ucretsiz") : detail.Value.Price;
                         dto.PosterUrl = detail.Value.Poster;
                     }
                 }
@@ -2986,7 +2652,10 @@ public class HomeController : Controller
                 list.Add(dto);
             }
 
-            var merged = MergeCatalogItems(list.Concat(SearchLocalGames(query, lang)));
+            var merged = list.Concat(SearchLocalGames(query, lang))
+                .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+                .Select(g => g.First())
+                .ToList();
 
             return RankFuzzy(query, merged);
         }
@@ -3089,7 +2758,10 @@ public class HomeController : Controller
             new() { Name = "The Killing Joke", Genre = "Comic, Superhero", Summary = "Batman ve Joker'in karanlik hikayesi.", PosterUrl = "https://covers.openlibrary.org/b/isbn/9781401216672-M.jpg", Score = string.Empty }
         };
 
-        var merged = MergeCatalogItems(google.Concat(open).Concat(local));
+        var merged = google.Concat(open).Concat(local)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
         return RankFuzzy(query, merged);
     }
 
@@ -3104,7 +2776,10 @@ public class HomeController : Controller
             : new List<CatalogSuggestionViewModel>();
         var local = SearchLocalWebtoons(query, lang);
 
-        var merged = MergeCatalogItems(anilist.Concat(mangadex).Concat(kitsu).Concat(jikan).Concat(google).Concat(local));
+        var merged = anilist.Concat(mangadex).Concat(kitsu).Concat(jikan).Concat(google).Concat(local)
+            .GroupBy(x => x.Name.Trim().ToLowerInvariant())
+            .Select(g => g.First())
+            .ToList();
         return RankFuzzy(query, merged);
     }
 

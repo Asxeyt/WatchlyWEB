@@ -1,1 +1,61 @@
-@* Watchly 1.1'de ana sayfa kaldırıldı. Eski URL controller tarafından listeye veya girişe yönlendirilir. *@
+@using KategoriSecici.Models
+@{
+    var lang = (ViewData["Lang"] as string ?? "tr").ToLowerInvariant();
+    if (lang != "en")
+    {
+        lang = "tr";
+    }
+
+    ViewData["Title"] = lang == "en" ? "Home" : "Anasayfa";
+    string T(string tr, string en) => lang == "en" ? en : tr;
+
+    var rows = new[]
+    {
+        MedyaKategori.Anime,
+        MedyaKategori.Manga,
+        MedyaKategori.Kitap,
+        MedyaKategori.Film,
+        MedyaKategori.Dizi,
+        MedyaKategori.Oyun,
+        MedyaKategori.CizgiFilm,
+        MedyaKategori.CizgiRoman,
+        MedyaKategori.Webtoon
+    };
+
+    string KategoriAdi(MedyaKategori k) => k switch
+    {
+        MedyaKategori.Kitap => T("KITAP", "BOOK"),
+        MedyaKategori.Film => T("FILM", "MOVIE"),
+        MedyaKategori.Dizi => T("DIZI", "SERIES"),
+        MedyaKategori.Oyun => T("OYUN", "GAME"),
+        MedyaKategori.CizgiFilm => T("CIZGI FILM", "CARTOON"),
+        MedyaKategori.CizgiRoman => T("CIZGI ROMAN", "COMIC"),
+        MedyaKategori.Webtoon => "WEBTOON",
+        _ => k.ToString().ToUpperInvariant()
+    };
+}
+
+<div class="home-shell">
+    <section class="home-main">
+        <div class="home-top-gap"></div>
+
+        @foreach (var kategori in rows)
+        {
+            <div class="home-row">
+                <a class="home-category-label" asp-controller="Home" asp-action="Index" asp-route-lang="@lang" asp-route-kategori="@kategori">
+                    @KategoriAdi(kategori):
+                </a>
+
+                <div class="home-popular-box">
+                    <h2>@T("HAFTANIN POPULERLERI", "WEEKLY MOST POPULAR")</h2>
+                    <div class="home-popular-placeholder"></div>
+                </div>
+            </div>
+        }
+    </section>
+
+    <aside class="right-hover-panel" aria-label="oneriler">
+        <div class="right-hover-tab">@T("ONERI", "RECO")</div>
+        <div class="right-hover-content"></div>
+    </aside>
+</div>

@@ -43,17 +43,6 @@ body {
   color: var(--text-color);
 }
 
-.watchly-release-signature {
-  width: 100%;
-  padding: 1rem 1.25rem 1.25rem;
-  color: var(--text-color);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-align: center;
-  opacity: 0.72;
-}
-
 .navbar {
   background: var(--nav-bg) !important;
 }

@@ -1,4 +1,4 @@
-Watchly 1.1
+Watchly
 
 Watchly is a media tracker for people who consume too much stuff to keep in their head. Movies, TV shows, anime, manga, games, books, comics, cartoons - log what you've watched or read, rate it, write a review, and keep a watchlist for what's next.
 

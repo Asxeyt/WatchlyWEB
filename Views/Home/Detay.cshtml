@@ -124,32 +124,26 @@
             }
 
             <div class="media-detail-meta">
-                <div><strong>@T("Tur", "Genre"):</strong> @(string.IsNullOrWhiteSpace(Model.Tur) ? T("Watchly bilgisi", "Watchly metadata") : Model.Tur)</div>
+                <div><strong>@T("Tur", "Genre"):</strong> @(string.IsNullOrWhiteSpace(Model.Tur) ? T("Bilgi yok", "No data") : Model.Tur)</div>
                 @if (oyun)
                 {
-                    <div><strong>@T("Fiyat", "Price"):</strong> @(string.IsNullOrWhiteSpace(Model.Fiyat) ? T("Güncel mağaza fiyatı", "Current store price") : Model.Fiyat)</div>
+                    <div><strong>@T("Fiyat", "Price"):</strong> @(string.IsNullOrWhiteSpace(Model.Fiyat) ? T("Bilgi yok", "No data") : Model.Fiyat)</div>
                 }
                 else if (!kitap)
                 {
-                    <div><strong>@T("Puan", "Score"):</strong> @(string.IsNullOrWhiteSpace(Model.Puan) ? "Watchly" : Model.Puan)</div>
+                    <div><strong>@T("Puan", "Score"):</strong> @(string.IsNullOrWhiteSpace(Model.Puan) ? T("Bilgi yok", "No data") : Model.Puan)</div>
                 }
-                @if (!string.IsNullOrWhiteSpace(Model.YayinTarihi))
+                <div><strong>@T("Yayin Tarihi", "Release Date"):</strong> @(string.IsNullOrWhiteSpace(Model.YayinTarihi) ? T("Bilgi yok", "No data") : Model.YayinTarihi)</div>
+                <div><strong>@T("Yapimci", "Producer/Studio"):</strong> @(string.IsNullOrWhiteSpace(Model.Yapimci) ? T("Bilgi yok", "No data") : Model.Yapimci)</div>
+                @if (kisiMetinGoster)
                 {
-                    <div><strong>@T("Yayin Tarihi", "Release Date"):</strong> @Model.YayinTarihi</div>
-                }
-                @if (!string.IsNullOrWhiteSpace(Model.Yapimci))
-                {
-                    <div><strong>@T("Yapimci", "Producer/Studio"):</strong> @Model.Yapimci</div>
-                }
-                @if (kisiMetinGoster && !string.IsNullOrWhiteSpace(Model.Oyuncular))
-                {
-                    <div><strong>@kisiBaslik:</strong> @Model.Oyuncular</div>
+                    <div><strong>@kisiBaslik:</strong> @(string.IsNullOrWhiteSpace(Model.Oyuncular) ? T("Bilgi yok", "No data") : Model.Oyuncular)</div>
                 }
             </div>
 
             <div class="media-detail-summary">
                 <h2>@T("Detayli Konu", "Detailed Summary")</h2>
-                <p>@(string.IsNullOrWhiteSpace(Model.Konu) ? T("Watchly tanıtımı hazırlanıyor.", "Watchly introduction is being prepared.") : Model.Konu)</p>
+                <p>@(string.IsNullOrWhiteSpace(Model.Konu) ? T("Konu bilgisi yok.", "No summary available.") : Model.Konu)</p>
             </div>
         </div>
     </div>

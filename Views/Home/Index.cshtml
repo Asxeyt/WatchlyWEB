@@ -82,8 +82,8 @@
         _ => "Interstellar"
     };
 
-    string BilgiYok() => T("Watchly bilgisi", "Watchly metadata");
-    string OzetYok() => T("Watchly tanıtımı hazırlanıyor.", "Watchly introduction is being prepared.");
+    string BilgiYok() => T("Bilgi yok", "No data");
+    string OzetYok() => T("Konu yok", "No summary");
     string TurEtiketi() => T("Tur", "Genre");
     string KonuEtiketi() => T("Konu", "Summary");
     string PuanEtiketi() => T("Puan", "Score");
@@ -156,13 +156,13 @@
         {
             return value
                 .Replace("Yayin", "Published", StringComparison.OrdinalIgnoreCase)
-                .Replace("Konu yok", "Watchly introduction is being prepared.", StringComparison.OrdinalIgnoreCase)
-                .Replace("Bilgi yok", "Watchly metadata", StringComparison.OrdinalIgnoreCase);
+                .Replace("Konu yok", "No summary", StringComparison.OrdinalIgnoreCase)
+                .Replace("Bilgi yok", "No data", StringComparison.OrdinalIgnoreCase);
         }
 
         return value
-            .Replace("No summary", "Watchly tanıtımı hazırlanıyor.", StringComparison.OrdinalIgnoreCase)
-            .Replace("No data", "Watchly bilgisi", StringComparison.OrdinalIgnoreCase)
+            .Replace("No summary", "Konu yok", StringComparison.OrdinalIgnoreCase)
+            .Replace("No data", "Bilgi yok", StringComparison.OrdinalIgnoreCase)
             .Replace("Published", "Yayin", StringComparison.OrdinalIgnoreCase);
     }
 
@@ -622,4 +622,6 @@
 })();
 </script>
 }
+
+
 
