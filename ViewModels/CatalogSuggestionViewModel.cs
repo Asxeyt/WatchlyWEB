@@ -1,7 +1,14 @@
+using System.Text.Json.Serialization;
+
 namespace KategoriSecici.ViewModels;
 
 public class CatalogSuggestionViewModel
 {
+    public int? CatalogId { get; set; }
+
+    [JsonIgnore]
+    public Dictionary<string, string> ExternalIds { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
     public string Name { get; set; } = string.Empty;
 
     public string AltName { get; set; } = string.Empty;

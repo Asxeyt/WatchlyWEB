@@ -8,6 +8,8 @@ public class AnaSayfaViewModel
 
     public string? YeniOgeAdi { get; set; }
 
+    public int? YeniOgeCatalogId { get; set; }
+
     public string? YeniOgePosterUrl { get; set; }
 
     public string? YeniOgeTur { get; set; }

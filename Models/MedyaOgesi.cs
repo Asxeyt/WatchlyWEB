@@ -30,6 +30,9 @@ public class MedyaOgesi
 
     public int? AppUserId { get; set; }
 
+    // The user-list row keeps its own display data while retaining its shared-catalog identity.
+    public int? CatalogWorkId { get; set; }
+
     public bool Izlendi { get; set; } = false;
 
     public int? DegerlendirmeSeviyesi { get; set; }

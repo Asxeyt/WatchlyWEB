@@ -6,10 +6,10 @@ namespace KategoriSecici.Models;
 public static class WatchlyRelease
 {
     public const string Product = "Watchly";
-    public const string Version = "1.2";
+    public const string Version = "2.0";
     public const string Author = "Asxeyt";
 
-    private const string SignatureHash = "f557b9cf9beddf5db1fa1ee79233ab7d644a11c5419f8cf6d10c9dd48fdc466d";
+    private const string SignatureHash = "f280e29807fe4bd1fb4be537c82e086157558460669ddb703cd144d0a97014ae";
 
     public static string Display => $"{Product} v{Version} · {Author}";
 
